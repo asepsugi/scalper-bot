@@ -107,13 +107,13 @@ STRATEGY_CONFIG = {
     "AdaptiveTrendRide(A3)": {
         "function": signal_version_A3,
         "weight": 1.0
-    },
-    "ReversalMomentumRider(A4R)": {
-        "function": signal_version_A4R,
-        "weight": 1.0
     # },
-    # "VolatilityScalper(B1)": {
-    #     "function": signal_version_B1,
-    #     "weight": 0.8 # Contoh: B1 sedikit kurang dipercaya, jadi bobotnya lebih rendah
+    # "ReversalMomentumRider(A4R)": {
+    #     "function": signal_version_A4R,
+    #     "weight": 1.0
+    },
+    "VolatilityScalper(B1)": {
+        "function": signal_version_B1,
+        "weight": 0.8 # Contoh: B1 sedikit kurang dipercaya, jadi bobotnya lebih rendah
     }
 }

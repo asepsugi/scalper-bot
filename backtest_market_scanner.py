@@ -1,6 +1,7 @@
 import argparse
 import pandas as pd
 import numpy as np
+from datetime import datetime # Impor datetime untuk timestamp log
 from concurrent.futures import ThreadPoolExecutor, as_completed # Tetap digunakan untuk paralelisasi
 import time # Impor modul time
 import math # Impor math untuk fungsi ceil
@@ -429,6 +430,12 @@ class PortfolioBacktester:
         stop_loss_dist = atr_val * sl_multiplier
         stop_loss_pct = stop_loss_dist / limit_price
         
+        # --- PERBAIKAN KEAMANAN: Validasi parameter risiko ---
+        # Mencegah pembagian dengan nol atau logika terbalik jika parameter SL/TP tidak valid.
+        if stop_loss_pct <= 0:
+            console.log(f"[yellow]Skipping order for {symbol}: Invalid stop_loss_pct ({stop_loss_pct:.4f}). Check strategy exit_params.[/yellow]")
+            return
+
         if stop_loss_pct == 0: return # Avoid division by zero
 
         # Gunakan leverage dinamis per simbol, dengan fallback ke leverage dinamis dari modal
@@ -463,7 +470,7 @@ class PortfolioBacktester:
             'margin_used': margin_for_this_trade,
             'strategy': signal_row['strategy'],
         }
-    def get_results(self):
+    def get_results(self, args):
         if not self.trades:
             # --- REVISI: Tambahkan penanganan jika ada posisi aktif tapi tidak ada trade yang selesai ---
             console.log("[bold yellow]No trades were executed across the entire market scan.[/bold yellow]")
@@ -645,6 +652,67 @@ class PortfolioBacktester:
         filename = output_dir / "market_scan_results.csv"
         trades_df.to_csv(filename, index=False)
         console.log(f"\n[bold]Full trade log saved to '{filename}'[/bold]")
+        
+        # --- REVISI: Panggil fungsi untuk menulis ke BACKTEST_LOG.md ---
+        self._log_results_to_markdown(
+            args=args,
+            net_profit=net_profit,
+            net_profit_pct=net_profit_pct,
+            total_trades=total_trades,
+            win_rate=win_rate,
+            profit_factor=profit_factor,
+            max_drawdown=max_drawdown,
+            duration_str=duration_str
+        )
+
+    def _log_results_to_markdown(self, args, **kwargs):
+        """Secara otomatis menambahkan entri baru ke BACKTEST_LOG.md."""
+        log_file_path = Path('BACKTEST_LOG.md')
+        console.log(f"\n[bold]Appending results to {log_file_path}...[/bold]")
+
+        # 1. Siapkan bagian Konfigurasi Strategi
+        strategy_table_header = "| Nama Strategi                | Fungsi                 | Bobot (Weight) | Status   |\n"
+        strategy_table_divider = "| ---------------------------- | ---------------------- | -------------- | -------- |\n"
+        strategy_rows = ""
+        for name, config in STRATEGY_CONFIG.items():
+            # Asumsi: semua strategi di STRATEGY_CONFIG adalah yang aktif untuk run ini
+            strategy_rows += f"| `{name}`      | `{config['function'].__name__}`    | {config['weight']}            | ✅ Aktif |\n"
+
+        # 2. Siapkan bagian Hasil Ringkas
+        results_table = (
+            f"| Metrik            | Nilai                      |\n"
+            f"| ----------------- | -------------------------- |\n"
+            f"| Saldo Awal        | ${self.initial_balance:,.2f}                     |\n"
+            f"| Saldo Akhir       | ${self.balance:,.2f}                     |\n"
+            f"| **Net Profit**    | **+${kwargs['net_profit']:,.2f} (+{kwargs['net_profit_pct']:.2f}%)**       |\n"
+            f"| Total Trades      | {kwargs['total_trades']}                         |\n"
+            f"| Win Rate          | {kwargs['win_rate']:.2f}%                     |\n"
+            f"| Profit Factor     | {kwargs['profit_factor']:.2f}                       |\n"
+            f"| Max Drawdown      | {kwargs['max_drawdown']:.2f}%                      |\n"
+        )
+
+        # 3. Gabungkan semua menjadi satu entri log
+        log_entry = (
+            f"\n---\n\n"
+            f"## Backtest: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            f"**Parameter:**\n"
+            f"-   **Simbol:** Top {args.max_symbols} (berdasarkan volume)\n"
+            f"-   **Candles:** {args.limit}\n"
+            f"-   **Periode:** ~{kwargs['duration_str']}\n\n"
+            f"**Konfigurasi Strategi (`STRATEGY_CONFIG` saat dijalankan):**\n\n"
+            f"{strategy_table_header}"
+            f"{strategy_table_divider}"
+            f"{strategy_rows}\n"
+            f"**Hasil Ringkas:**\n\n"
+            f"{results_table}\n"
+            f"**Catatan & Observasi:**\n"
+            f"-   (Isi observasi Anda di sini)\n\n"
+        )
+
+        # 4. Tulis entri ke file (prepend/tambahkan di awal)
+        original_content = log_file_path.read_text() if log_file_path.exists() else ""
+        log_file_path.write_text(log_entry + original_content)
+        console.log(f"[green]✅ Results successfully appended to {log_file_path}[/green]")
 
 
 if __name__ == "__main__":
@@ -670,4 +738,4 @@ if __name__ == "__main__":
     symbols_to_scan = all_symbols[:args.max_symbols]
 
     scanner.run_scan(symbols=symbols_to_scan, limit=args.limit)
-    scanner.get_results()
+    scanner.get_results(args=args)
