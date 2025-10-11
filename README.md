@@ -127,4 +127,36 @@ Most of the bot's behavior can be tweaked in `config.py` and `strategies.py`.
 
 ## ⚠️ Disclaimer
 
+### 💡 Adding Your Own Strategy
+
+The bot is designed to be modular, making it easy to add your own custom trading strategies. Here’s how:
+
+1.  **Open `strategies.py`**: This file contains all the trading logic.
+
+2.  **Define Your Strategy Function**: Create a new Python function that accepts a pandas DataFrame (`df`) as input. This DataFrame will contain the OHLCV data and all pre-calculated indicators. Your function must return three items:
+    -   `long_signals`: A pandas Series of booleans indicating a buy signal.
+    -   `short_signals`: A pandas Series of booleans indicating a sell signal.
+    -   `exit_params`: A dictionary specifying the Stop Loss (`sl_multiplier`) and Risk-Reward Ratio (`rr_ratio`) for your strategy.
+
+    ```python
+    # Example of a new strategy function in strategies.py
+    def signal_my_awesome_strategy(df):
+        exit_params = {'sl_multiplier': 2.0, 'rr_ratio': 1.5}
+        long_condition = (df['rsi_15m'] < 30) & (df['close'] > df['EMA_200'])
+        short_condition = (df['rsi_15m'] > 70) & (df['close'] < df['EMA_200'])
+        return long_condition, short_condition, exit_params
+    ```
+
+3.  **Register Your Strategy**: Scroll to the bottom of `strategies.py` and add your new strategy to the `STRATEGY_CONFIG` dictionary. Give it a unique name, point to the function you just created, and assign it a `weight`. The weight determines its influence in the consensus signal.
+
+    ```python
+    # Add your strategy to the dictionary in strategies.py
+    "MyAwesomeStrategy": {
+        "function": signal_my_awesome_strategy,
+        "weight": 1.5 # Give it a higher weight if you trust it more
+    }
+    ```
+
+4.  **(Optional) Add New Indicators**: If your strategy requires an indicator that isn't already calculated (e.g., Bollinger Bands), you'll need to add its calculation to the `calculate_indicators` function in `indicators.py`.
+
 This trading bot is provided for educational and experimental purposes only. Trading cryptocurrencies, especially with leverage, involves substantial risk and may not be suitable for every investor. You are solely responsible for any financial losses. The creators of this software are not liable for any losses incurred. **Do not use this bot with real money unless you fully understand the code and the risks involved.** Always start with `demo_trader.py` to test your strategies.
