@@ -1,0 +1,19 @@
+# =============================================================================
+# Git Ignore File
+# =============================================================================
+
+# Kredensial dan variabel lingkungan
+# JANGAN PERNAH HAPUS BARIS INI!
+.env
+
+# Direktori cache dan output yang dibuat oleh bot/backtester
+cache/
+output/
+
+# File cache Python
+__pycache__/
+*.pyc
+
+# Direktori virtual environment
+venv/
+.venv/
