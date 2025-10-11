@@ -111,9 +111,9 @@ STRATEGY_CONFIG = {
     "ReversalMomentumRider(A4R)": {
         "function": signal_version_A4R,
         "weight": 1.0
-    },
-    "VolatilityScalper(B1)": {
-        "function": signal_version_B1,
-        "weight": 0.8 # Contoh: B1 sedikit kurang dipercaya, jadi bobotnya lebih rendah
+    # },
+    # "VolatilityScalper(B1)": {
+    #     "function": signal_version_B1,
+    #     "weight": 0.8 # Contoh: B1 sedikit kurang dipercaya, jadi bobotnya lebih rendah
     }
 }

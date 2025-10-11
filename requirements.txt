@@ -1,0 +1,8 @@
+ccxt
+pandas
+pandas-ta
+numpy
+rich
+aiofiles
+python-dotenv
+python-dateutil

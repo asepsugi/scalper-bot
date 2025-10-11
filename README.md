@@ -59,6 +59,7 @@ The bot is designed to be modular, making it easy to add your own custom trading
 ├── .env.example          # Template for the .env file
 ├── .gitignore            # Specifies files for Git to ignore
 ├── backtest_market_scanner.py # Backtester for multi-symbol portfolio simulation
+├── BACKTEST_LOG.md       # (You update this) Log for your backtest results
 ├── backtest_strategy_comparation.py # Backtester to compare strategies
 ├── config.py             # Main configuration for strategies and bot parameters
 ├── demo_trader.py        # Main script for running the bot on Binance Testnet
