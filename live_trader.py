@@ -172,19 +172,12 @@ class LiveTrader:
                 task = await self.signal_queue.get()
                 symbol, df_5m = task['symbol'], task['data']
 
-                # --- REVISI KRUSIAL: Pemeriksaan Batas Posisi Aktif Global ---
-                # Lakukan pemeriksaan di sini, sebelum analisis lebih lanjut.
-                # Ini adalah rem pengaman utama untuk mencegah over-exposure.
-                balance_info = await self.exchange.fetch_balance()
-                total_balance = balance_info.get('USDT', {}).get('total', 0)
-                risk_params = get_dynamic_risk_params(total_balance)
-                max_active_positions = risk_params['max_active_positions']
-
+                # --- OPTIMISASI: Pindahkan pemeriksaan balance ke execute_trade_logic ---
+                # Cek batas posisi hanya berdasarkan state internal untuk mengurangi panggilan API.
                 # Hitung total eksposur: posisi aktif + order limit yang sedang dibuka
                 total_exposure = len(self.active_positions) + len(self.open_limit_orders)
-                if total_exposure >= max_active_positions:
-                    # Jangan proses sinyal baru jika batas eksposur sudah tercapai.
-                    console.log(f"[yellow]SKIP SIGNAL for {symbol}: Batas total eksposur ({max_active_positions}) telah tercapai.[/yellow]")
+                if total_exposure >= LIVE_TRADING_CONFIG.get('max_active_positions_limit', 10): # Gunakan batas statis sementara
+                    console.log(f"[yellow]SKIP SIGNAL for {symbol}: Batas total eksposur ({total_exposure}) telah tercapai.[/yellow]")
                     continue
 
                 # Pemeriksaan keamanan sekunder: jangan proses jika sudah ada posisi/order untuk simbol ini.
@@ -619,15 +612,21 @@ class LiveTrader:
         """Loop utama untuk mendengarkan data kline dari semua simbol."""
         await self.initialize_exchange()
 
-        # --- REVISI: Dapatkan balance awal untuk menentukan parameter dinamis ---
-        # Ini memastikan bot dimulai dengan konfigurasi yang tepat untuk modalnya.
+        # --- REVISI: Dapatkan balance awal dan posisi aktif saat startup ---
         initial_balance_info = await self.exchange.fetch_balance()
         initial_total_balance = initial_balance_info.get('USDT', {}).get('total', 0)
+
+        # --- REVISI BARU: Cetak status awal ke log ---
+        startup_log_msg = f"STARTUP_STATE: Balance: ${initial_total_balance:.2f}, Loaded Active Positions: {len(self.active_positions)}"
+        console.log(f"[bold blue]{startup_log_msg}[/bold blue]")
+        await self.log_event(startup_log_msg)
+
+        # Tentukan parameter dinamis berdasarkan modal
         dynamic_params = get_dynamic_risk_params(initial_total_balance)
         self.max_symbols_to_trade = dynamic_params['max_active_positions'] * 10 # Pantau 10x dari maks posisi
 
         # --- REVISI: Dapatkan simbol secara dinamis ---
-        all_symbols = get_all_futures_symbols()
+        all_symbols = await get_all_futures_symbols(self.exchange)
         self.symbols = all_symbols[:self.max_symbols_to_trade] # Gunakan batas dinamis
         console.log(f"Modal awal: ${initial_total_balance:.2f}. Menggunakan parameter risiko dinamis: {dynamic_params}")
         console.log(f"Memindai [bold]{len(self.symbols)}[/bold] simbol teratas (dari {len(all_symbols)} yang ditemukan) berdasarkan modal.")

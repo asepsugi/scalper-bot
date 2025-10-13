@@ -106,7 +106,7 @@ def signal_version_B1(df):
 STRATEGY_CONFIG = {
     "AdaptiveTrendRide(A3)": {
         "function": signal_version_A3,
-        "weight": 1.0
+        "weight": 0.8
     # },
     # "ReversalMomentumRider(A4R)": {
     #     "function": signal_version_A4R,
@@ -114,6 +114,6 @@ STRATEGY_CONFIG = {
     },
     "VolatilityScalper(B1)": {
         "function": signal_version_B1,
-        "weight": 0.8 # Contoh: B1 sedikit kurang dipercaya, jadi bobotnya lebih rendah
+        "weight": 1.2 # Contoh: B1 sedikit kurang dipercaya, jadi bobotnya lebih rendah
     }
 }

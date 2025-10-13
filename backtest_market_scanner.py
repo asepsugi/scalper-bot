@@ -6,13 +6,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed # Tetap digunaka
 import time # Impor modul time
 import math # Impor math untuk fungsi ceil
 import ccxt
+import ccxt.pro as ccxtpro # Impor ccxt.pro untuk koneksi async
 from pathlib import Path
 from dateutil.relativedelta import relativedelta
 from rich.console import Console
 from rich.table import Table
 
 from utils.common_utils import get_dynamic_risk_params, get_all_futures_symbols
-from config import CONFIG, FEES, SLIPPAGE, LEVERAGE_MAP, LIVE_TRADING_CONFIG
+from config import CONFIG, FEES, SLIPPAGE, LEVERAGE_MAP, LIVE_TRADING_CONFIG, API_KEYS
 from indicators import fetch_binance_data_sync # REVISI: Impor versi sinkron
 from utils.data_preparer import prepare_data
 from strategies import STRATEGY_CONFIG
@@ -586,6 +587,35 @@ class PortfolioBacktester:
             
             console.print(daily_pnl_table)
 
+        # --- REVISI: Tambahkan tabel performa per strategi jika > 1 strategi aktif ---
+        if len(STRATEGY_CONFIG) > 1:
+            console.print("\n[bold]Performance by Strategy:[/bold]")
+
+            # Agregasi metrik untuk setiap strategi
+            strategy_performance = trades_df.groupby('Strategy').agg(
+                total_pnl=('PnL (USD)', 'sum'),
+                total_trades=('ID', 'count'),
+                wins=('PnL (USD)', lambda pnl: (pnl > 0).sum())
+            ).reset_index()
+
+            strategy_performance['win_rate'] = (strategy_performance['wins'] / strategy_performance['total_trades']) * 100
+            strategy_performance = strategy_performance.sort_values(by="total_pnl", ascending=False)
+
+            # Buat dan isi tabel
+            strategy_table = Table(show_header=True, header_style="bold green")
+            strategy_table.add_column("Strategy", style="green")
+            strategy_table.add_column("Total Trades", justify="right")
+            strategy_table.add_column("Win Rate", justify="right")
+            strategy_table.add_column("Total PnL (USD)", justify="right")
+
+            for _, row in strategy_performance.iterrows():
+                pnl_str = f"[green]${row['total_pnl']:,.2f}[/green]" if row['total_pnl'] > 0 else f"[red]${row['total_pnl']:,.2f}[/red]"
+                strategy_table.add_row(
+                    row['Strategy'], str(row['total_trades']), f"{row['win_rate']:.2f}%", pnl_str
+                )
+            
+            console.print(strategy_table)
+
         # --- REVISI: Tampilkan performa per koin dengan metrik yang lebih detail ---
         console.print("\n[bold]Performance by Symbol:[/bold]")
 
@@ -721,20 +751,47 @@ if __name__ == "__main__":
     parser.add_argument("--max_symbols", type=int, default=50, help="Maximum number of symbols to scan (sorted by volume)")
     args = parser.parse_args()
 
+    import asyncio # Impor asyncio di sini agar hanya digunakan saat skrip dijalankan
+    # --- PERBAIKAN: Logika baru untuk mengambil simbol secara asinkron ---
+    async def fetch_symbols_async():
+        """
+        Fungsi helper async yang terisolasi untuk mengambil daftar simbol.
+        Ini membuat instance exchange async sendiri, mengambil data, lalu menutupnya.
+        """
+        console.log("Membuat koneksi async sementara untuk mengambil daftar simbol...")
+        async_exchange = None
+        try:
+            # Gunakan ccxt.pro untuk koneksi async
+            async_exchange = ccxtpro.binance({
+                'apiKey': API_KEYS['live']['api_key'],
+                'secret': API_KEYS['live']['api_secret'],
+                'options': {'defaultType': 'future'},
+                'enableRateLimit': True,
+            })
+            async_exchange.set_sandbox_mode(False)
+            symbols = await get_all_futures_symbols(async_exchange)
+            return symbols
+        finally:
+            if async_exchange:
+                await async_exchange.close()
+                console.log("Koneksi async sementara ditutup.")
+
+    # Jalankan fungsi async menggunakan asyncio.run() yang modern dan aman
+    all_symbols = asyncio.run(fetch_symbols_async())
+
     scanner = PortfolioBacktester(initial_balance=CONFIG["account_balance"])
-    # --- PERBAIKAN KONSISTENSI ---
-    # Pastikan koneksi ini juga menggunakan API key live secara eksplisit.
-    from config import API_KEYS
+
+    # --- PERBAIKAN: Inisialisasi ulang exchange sinkron untuk backtester ---
+    # Backtester utama membutuhkan instance exchange sinkron untuk mengambil data historis.
+    # Ini terpisah dari koneksi asinkron yang digunakan untuk mengambil daftar simbol.
     scanner.exchange = ccxt.binance({
         'apiKey': API_KEYS['live']['api_key'],
         'secret': API_KEYS['live']['api_secret'],
         'options': {'defaultType': 'future'},
         'enableRateLimit': True,
-        'test': False,
     })
     scanner.exchange.set_sandbox_mode(False)
 
-    all_symbols = get_all_futures_symbols() # Call the synchronous version
     symbols_to_scan = all_symbols[:args.max_symbols]
 
     scanner.run_scan(symbols=symbols_to_scan, limit=args.limit)

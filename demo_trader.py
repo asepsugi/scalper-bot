@@ -154,14 +154,11 @@ class DemoTrader:
                 task = await self.signal_queue.get()
                 symbol, df_5m = task['symbol'], task['data']
 
-                balance_info = await self.exchange.fetch_balance()
-                total_balance = balance_info.get('USDT', {}).get('total', 0)
-                risk_params = get_dynamic_risk_params(total_balance)
-                max_active_positions = risk_params['max_active_positions']
-
+                # --- OPTIMISASI: Pindahkan pemeriksaan balance ke execute_trade_logic ---
+                # Cek batas posisi hanya berdasarkan state internal untuk mengurangi panggilan API.
                 total_exposure = len(self.active_positions) + len(self.open_limit_orders)
-                if total_exposure >= max_active_positions:
-                    console.log(f"[yellow]SKIP DEMO SIGNAL for {symbol}: Batas total eksposur ({max_active_positions}) telah tercapai.[/yellow]")
+                if total_exposure >= LIVE_TRADING_CONFIG.get('max_active_positions_limit', 10): # Gunakan batas statis sementara
+                    console.log(f"[yellow]SKIP DEMO SIGNAL for {symbol}: Batas total eksposur ({total_exposure}) telah tercapai.[/yellow]")
                     continue
 
                 if symbol in self.active_positions or symbol in self.open_limit_orders:
@@ -505,13 +502,21 @@ class DemoTrader:
         """Loop utama untuk mendengarkan data kline dari semua simbol di demo."""
         await self.initialize_exchange()
 
+        # --- REVISI: Dapatkan balance awal dan posisi aktif saat startup ---
         initial_balance_info = await self.exchange.fetch_balance()
         initial_total_balance = initial_balance_info.get('USDT', {}).get('total', 0)
+
+        # --- REVISI BARU: Cetak status awal ke log ---
+        startup_log_msg = f"DEMO_STARTUP_STATE: Balance: ${initial_total_balance:.2f}, Loaded Active Positions: {len(self.active_positions)}"
+        console.log(f"[bold yellow]{startup_log_msg}[/bold yellow]")
+        await self.log_event(startup_log_msg)
+
+        # Tentukan parameter dinamis berdasarkan modal
         dynamic_params = get_dynamic_risk_params(initial_total_balance)
         self.max_symbols_to_trade = dynamic_params['max_active_positions'] * 10
 
         # --- PERBAIKAN: Panggil fungsi tanpa argumen agar selaras dengan live_trader ---
-        all_symbols = get_all_futures_symbols()
+        all_symbols = await get_all_futures_symbols(self.exchange)
         self.symbols = all_symbols[:self.max_symbols_to_trade]
         console.log(f"Modal demo awal: ${initial_total_balance:.2f}. Menggunakan parameter risiko dinamis: {dynamic_params}")
         console.log(f"Memindai [bold]{len(self.symbols)}[/bold] simbol teratas di Testnet.")

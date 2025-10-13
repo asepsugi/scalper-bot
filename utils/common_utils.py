@@ -47,19 +47,11 @@ def get_dynamic_risk_params(total_balance: float) -> dict:
         }
 
 
-def get_all_futures_symbols():
-    """Fetches all USDT perpetual futures symbols from Binance."""
+async def get_all_futures_symbols(exchange: ccxt.Exchange):
+    """Fetches all USDT perpetual futures symbols from Binance using the provided exchange instance."""
     try:
-        binance_sync = ccxt.binance({
-            'apiKey': API_KEYS['live']['api_key'],
-            'secret': API_KEYS['live']['api_secret'],
-            'options': {'defaultType': 'future'},
-            'test': False,
-            'enableRateLimit': True,
-        })
-        binance_sync.set_sandbox_mode(False)
-        markets = binance_sync.load_markets()
-        tickers = binance_sync.fetch_tickers()
+        markets = await exchange.load_markets()
+        tickers = await exchange.fetch_tickers()
 
         min_volume_usd = 50_000_000
 
