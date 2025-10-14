@@ -93,7 +93,7 @@ def fetch_binance_data_sync(exchange, symbol, timeframe, limit, use_cache=True):
     if use_cache and cache_file.exists():
         print(f"Loading {symbol} data from cache (use_cache=True): {cache_file}")
         with open(cache_file, 'rb') as f:
-            return pickle.load(f)
+            return pickle.load(f), True # Kembalikan data dan flag 'from_cache'
 
     if not exchange:
         print("Exchange is not initialized. Cannot fetch data.")
@@ -123,10 +123,10 @@ def fetch_binance_data_sync(exchange, symbol, timeframe, limit, use_cache=True):
             with open(cache_file, 'wb') as f:
                 pickle.dump(df, f)
             print(f"Saved {symbol} data to cache: {cache_file}")
-        return df
+        return df, False # Kembalikan data dan flag 'from_cache'
     except (ccxt.NetworkError, ccxt.ExchangeError, ccxt.BadSymbol) as e:
         print(f"Error fetching data from Binance for {symbol}: {e}")
-        return None
+        return None, False
 
 def get_trend(df, ema_period):
     """Menentukan tren berdasarkan harga penutupan terhadap EMA."""
@@ -238,9 +238,15 @@ def calculate_indicators(df):
     df.ta.adx(append=True) # Default length 14
     df.ta.vwap(append=True)
 
-    # --- REVISI FINAL: Kembalikan perhitungan Volume SMA dengan cara yang aman ---
-    # pandas-ta akan membuat kolom bernama 'VOL_20' jika prefix='VOL'.
-    # Ini adalah cara yang benar untuk menghitungnya tanpa merusak index.
+    # --- PERBAIKAN FINAL: Kembalikan perhitungan Volume SMA ke sini ---
+    # Ini memastikan VOL_20 dihitung pada semua timeframe sejak awal.
     df.ta.sma(close=df['volume'], length=CONFIG["volume_lookback"], prefix="VOL", append=True)
+    
+    # --- PERBAIKAN KRUSIAL: Ganti nama kolom default pandas_ta ---
+    # pandas_ta membuat kolom 'VOL_SMA_20', kita butuh 'VOL_20' agar konsisten.
+    default_vol_col = f"VOL_SMA_{CONFIG['volume_lookback']}"
+    target_vol_col = f"VOL_{CONFIG['volume_lookback']}"
+    if default_vol_col in df.columns:
+        df.rename(columns={default_vol_col: target_vol_col}, inplace=True)
 
     return df

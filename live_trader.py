@@ -43,8 +43,8 @@ class LiveTrader:
         self.is_fetching = {symbol: False for symbol in symbols} # Lock untuk mencegah fetching ganda
         # --- REVISI: Tambahkan manajemen state posisi aktif ---
         self.active_positions = {} # {symbol: {details}}
-        # --- REVISI BARU: Lacak order limit yang sedang aktif untuk mencegah duplikasi ---
-        self.open_limit_orders = set() # Set of symbols with active limit orders
+        # --- PERBAIKAN: Ubah open_limit_orders menjadi dict untuk menyimpan state ---
+        self.open_limit_orders = {} # {symbol: {sl_price, tp_price, initial_sl}}
         self.load_positions_state()
         # --- REVISI: Gunakan antrian untuk memproses sinyal ---
         self.signal_queue = asyncio.Queue()
@@ -52,6 +52,9 @@ class LiveTrader:
         self.insufficient_balance_attempts = 0
         self.cooldown_until = None
         self.cooldown_duration_hours = 6
+        # --- FITUR BARU: Lacak volume real-time untuk Circuit Breaker ---
+        self.trade_volume_tracker = {} # {symbol: {'volume': float, 'last_update': datetime}}
+        self.avg_5m_volume = {} # {symbol: float}
 
     async def log_event(self, message):
         """Menulis event ke file log secara asinkron untuk menghindari pemblokiran."""
@@ -154,6 +157,11 @@ class LiveTrader:
                 # Jaga ukuran DataFrame agar tidak terlalu besar
                 self.historical_data[symbol] = self.historical_data[symbol].tail(650)
 
+                # --- FITUR BARU: Update rata-rata volume 5 menit ---
+                # Digunakan oleh circuit breaker untuk mendeteksi anomali volume.
+                # Ambil rata-rata volume dari 12 candle terakhir (1 jam).
+                self.avg_5m_volume[symbol] = self.historical_data[symbol]['volume'].tail(12).mean()
+
                 # 2. Masukkan data ke antrian untuk dianalisis
                 await self.signal_queue.put({'symbol': symbol, 'data': self.historical_data[symbol].copy()})
 
@@ -182,7 +190,7 @@ class LiveTrader:
 
                 # Pemeriksaan keamanan sekunder: jangan proses jika sudah ada posisi/order untuk simbol ini.
                 # Meskipun sebagian besar sudah ditangani oleh cek total_exposure, ini mencegah race condition.
-                if symbol in self.active_positions or symbol in self.open_limit_orders:
+                if symbol in self.active_positions or symbol in self.open_limit_orders.keys():
                     continue
 
                 # --- REVISI: Buat data MTA dari data 5m ---
@@ -197,6 +205,12 @@ class LiveTrader:
                 if any(df.empty for df in [df_15m, df_1h]):
                     console.log(f"[yellow]Data resample untuk {symbol} tidak cukup, analisis dilewati.[/yellow]")
                     continue
+
+                # --- PERBAIKAN KRUSIAL: Hitung indikator untuk setiap timeframe SEBELUM digabungkan ---
+                # Ini memastikan data_preparer menerima semua kolom yang dibutuhkan.
+                df_5m = calculate_indicators(df_5m)
+                df_15m = calculate_indicators(df_15m)
+                df_1h = calculate_indicators(df_1h)
 
                 # Siapkan data dengan semua indikator
                 base_data = prepare_data(df_5m, df_15m, df_1h)
@@ -415,18 +429,26 @@ class LiveTrader:
 
             # Buat parameter untuk order gabungan (entry, sl, tp)
             side = 'buy' if direction == 'LONG' else 'sell'
-            params = {
-                'stopLoss': {'type': 'STOP_MARKET', 'triggerPrice': sl_price_str},
-                'takeProfit': {'type': 'TAKE_PROFIT_MARKET', 'triggerPrice': tp_price_str}
-            }
             
-            # REVISI DEFINITIF: Gunakan create_order standar dengan header mock.
-            # Metode ini sudah dirancang untuk menangani parameter SL/TP.
+            # --- PERBAIKAN: Gunakan saklar untuk memilih strategi exit ---
+            params = {}
+            if not LIVE_TRADING_CONFIG.get("use_advanced_exit_logic", True):
+                # Mode Statis: Tempatkan SL/TP langsung di bursa
+                params = {
+                    'stopLoss': {'type': 'STOP_MARKET', 'triggerPrice': sl_price_str},
+                    'takeProfit': {'type': 'TAKE_PROFIT_MARKET', 'triggerPrice': tp_price_str}
+                }
             order = await self.exchange.create_order(symbol, 'limit', side, amount, limit_price_str, params)
 
-            
-            # --- REVISI BARU: Tambahkan simbol ke set order yang sedang dibuka ---
-            self.open_limit_orders.add(symbol)
+            # --- PERBAIKAN: Simpan state order (termasuk initial_sl) di open_limit_orders ---
+            self.open_limit_orders[symbol] = {
+                'sl_price': sl_price_float,
+                'tp_price': tp_price_float,
+                'initial_sl': sl_price_float, # Saat dibuat, sl_price adalah initial_sl
+                'entryPrice': limit_price_float, # Simpan harga entry yang diinginkan
+                'positionAmt': amount if side == 'buy' else -amount,
+                'strategy': strategy_name
+            }
 
             console.log(f"[bold green]Order berhasil dibuat untuk {symbol}. ID: {order['id']}[/bold green]")
             await notifier.send_message(f"✅ *Order Ditempatkan* untuk {symbol}!\nID: `{order['id']}`")
@@ -556,15 +578,21 @@ class LiveTrader:
                     if status == 'closed': # 'closed' berarti terisi (filled)
                         # Cek apakah ini order entry atau SL/TP
                         if order['type'] in ['limit', 'market'] and symbol_ccxt not in self.active_positions:
-                             # Ini adalah order entry yang terisi
-                            # --- REVISI BARU: Hapus dari set order yang sedang dibuka ---
-                            if symbol_ccxt in self.open_limit_orders:
-                                self.open_limit_orders.remove(symbol_ccxt)
+                            # Ini adalah order entry yang terisi
+                            # Ambil state kustom yang kita simpan
+                            custom_state = self.open_limit_orders.pop(symbol_ccxt, {})
+                            if not custom_state:
+                                # Jika tidak ada state, mungkin ini posisi manual, abaikan.
+                                continue
 
                             # REVISI DEFINITIF: Gunakan metode standar 'fetch_position'.
                             position_info = await self.exchange.fetch_position(symbol) # Metode standar sudah benar
 
-                            self.active_positions[symbol_ccxt] = position_info['info']
+                            # --- PERBAIKAN: Gabungkan info dari bursa dengan state kustom kita ---
+                            final_position_details = position_info['info']
+                            final_position_details.update(custom_state) # Tambahkan sl_price, tp_price, initial_sl, dll.
+                            self.active_positions[symbol_ccxt] = final_position_details
+
                             self.save_positions_state()
                             filled_price = order.get('average', order.get('price'))
                             msg = f"✅ *Posisi Dibuka* untuk {symbol} @ `{filled_price}`"
@@ -573,8 +601,8 @@ class LiveTrader:
                             await self.log_event(f"ENTRY_FILLED: Posisi {symbol} dibuka @ {filled_price}")
                         else:
                             # Ini adalah order SL/TP yang terisi, posisi ditutup
-                            # --- REVISI BARU: Hapus dari set order yang sedang dibuka jika ada (misal, order entry dibatalkan lalu SL/TP kena) ---
-                            if symbol_ccxt in self.open_limit_orders:
+                            # Hapus dari open_limit_orders jika ada (kasus langka)
+                            if symbol_ccxt in self.open_limit_orders.keys():
                                 self.open_limit_orders.remove(symbol_ccxt)
 
                             if symbol_ccxt in self.active_positions:
@@ -587,8 +615,8 @@ class LiveTrader:
                             await self.log_event(f"EXIT_FILLED: Posisi {symbol} ditutup @ {filled_price}")
 
                     elif status in ['canceled', 'expired']:
-                        # --- REVISI BARU: Hapus dari set order yang sedang dibuka jika dibatalkan/kedaluwarsa ---
-                        if symbol_ccxt in self.open_limit_orders:
+                        # Hapus dari open_limit_orders jika dibatalkan/kedaluwarsa
+                        if symbol_ccxt in self.open_limit_orders.keys():
                             self.open_limit_orders.remove(symbol_ccxt)
 
                         msg = f"ℹ️ *Order Dibatalkan/Kedaluwarsa* untuk {symbol}"
@@ -607,6 +635,162 @@ class LiveTrader:
                 if isinstance(e, ccxtpro.NotSupported):
                     break
                 await asyncio.sleep(10) # Tunggu sebelum mencoba lagi
+    
+    # --- FITUR BARU: Logika SL/TP berbasis penutupan candle ---
+    async def check_manual_sl_tp(self):
+        """Memeriksa posisi aktif terhadap data candle terbaru untuk SL/TP manual."""
+        while True:
+            await asyncio.sleep(5) # Periksa setiap 5 detik
+            active_symbols = list(self.active_positions.keys())
+            if not active_symbols:
+                continue
+
+            for symbol in active_symbols:
+                try:
+                    pos_info = self.active_positions.get(symbol)
+                    if not pos_info or 'sl_price' not in pos_info: continue
+
+                    # Ambil candle terbaru yang sudah ditutup
+                    latest_candle = self.historical_data.get(symbol, pd.DataFrame()).iloc[-1]
+                    if latest_candle.empty: continue
+
+                    close_price = latest_candle['close']
+                    sl_price = pos_info['sl_price']
+                    tp_price = pos_info['tp_price']
+                    direction = "LONG" if float(pos_info['positionAmt']) > 0 else "SHORT"
+
+                    exit_reason = None
+                    # --- PERBAIKAN: Jangan cek TP jika trailing stop aktif ---
+                    is_trailing_active = pos_info.get('trailing_sl_active', False)
+
+                    if direction == "LONG":
+                        if close_price <= sl_price: exit_reason = "Manual SL (Close)"
+                        # Hanya picu TP jika trailing tidak aktif
+                        elif not is_trailing_active and close_price >= tp_price: exit_reason = "Manual TP (Close)"
+                    elif direction == "SHORT":
+                        if close_price >= sl_price: exit_reason = "Manual SL (Close)"
+                        # Hanya picu TP jika trailing tidak aktif
+                        elif not is_trailing_active and close_price <= tp_price: exit_reason = "Manual TP (Close)"
+
+                    if exit_reason:
+                        log_msg = f"MANUAL_EXIT_TRIGGER: {exit_reason} untuk {symbol} terpicu pada harga close {close_price}."
+                        console.log(f"[bold magenta]{log_msg}[/bold magenta]")
+                        await self.log_event(log_msg)
+                        await self.exchange.create_market_sell_order(symbol, abs(float(pos_info['positionAmt']))) if direction == "LONG" else await self.exchange.create_market_buy_order(symbol, abs(float(pos_info['positionAmt'])))
+                except Exception as e:
+                    console.log(f"[red]Error di check_manual_sl_tp untuk {symbol}: {e}[/red]")
+
+    # --- FITUR BARU: Circuit Breaker untuk Volatilitas Ekstrem ---
+    async def volatility_circuit_breaker(self):
+        """
+        Memantau harga mark secara real-time. Jika harga bergerak melewati SL 
+        dengan persentase tertentu, segera tutup posisi untuk mencegah likuidasi.
+        Ini adalah jaring pengaman terakhir.
+        """
+        while True:
+            await asyncio.sleep(1) # Periksa setiap detik
+            active_symbols = list(self.active_positions.keys())
+            if not active_symbols:
+                continue
+
+            try:
+                # Ambil semua ticker sekaligus untuk efisiensi
+                tickers = await self.exchange.fetch_tickers(active_symbols)
+                for symbol in active_symbols:
+                    pos_info = self.active_positions.get(symbol)
+                    ticker = tickers.get(symbol)
+                    if not pos_info or not ticker or 'sl_price' not in pos_info: continue
+
+                    mark_price = ticker['mark']
+                    sl_price = pos_info['sl_price']
+                    direction = "LONG" if float(pos_info['positionAmt']) > 0 else "SHORT"
+
+                    # Tentukan ambang batas "darurat" (misal: 1.5x jarak SL awal)
+                    # Ini berarti jika harga menembus SL lebih dari 50% jarak SL-nya, kita keluar.
+                    cb_multiplier = LIVE_TRADING_CONFIG.get("circuit_breaker_multiplier", 1.5)
+                    # PERBAIKAN: Gunakan initial_sl untuk ambang batas yang konsisten
+                    sl_breach_threshold = abs(pos_info['entryPrice'] - pos_info['initial_sl']) * (cb_multiplier - 1.0)
+
+                    price_breached = (direction == "LONG" and mark_price < (sl_price - sl_breach_threshold)) or \
+                                     (direction == "SHORT" and mark_price > (sl_price + sl_breach_threshold))
+
+                    if price_breached:
+                        # --- PERBAIKAN: Tambahkan konfirmasi volume ---
+                        current_realtime_volume = self.trade_volume_tracker.get(symbol, {}).get('volume', 0)
+                        avg_volume = self.avg_5m_volume.get(symbol, 0)
+                        # Picu hanya jika volume real-time saat ini sudah > 50% dari volume rata-rata 1 candle penuh
+                        volume_confirmed = avg_volume > 0 and current_realtime_volume > (avg_volume * 0.5)
+
+                        if volume_confirmed:
+                            log_msg = f"CIRCUIT_BREAKER_TRIGGERED: Volatilitas ekstrem & volume tinggi pada {symbol}. Menutup posisi di {mark_price}."
+                            console.log(f"[bold red]{log_msg}[/bold red]")
+                            await self.log_event(log_msg)
+                            await self.exchange.create_market_sell_order(symbol, abs(float(pos_info['positionAmt']))) if direction == "LONG" else await self.exchange.create_market_buy_order(symbol, abs(float(pos_info['positionAmt'])))
+                        else:
+                            # Harga menembus tapi volume rendah, kemungkinan glitch. Jangan panik.
+                            pass
+
+            except Exception as e:
+                console.log(f"[red]Error di volatility_circuit_breaker: {e}[/red]")
+
+    # --- FITUR BARU: Trailing Stop Loss Manager ---
+    async def trailing_stop_manager(self):
+        """
+        Mengelola Trailing Stop Loss untuk posisi yang profit.
+        Memperbarui level SL secara dinamis untuk mengunci profit.
+        """
+        if not LIVE_TRADING_CONFIG.get("trailing_sl_enabled", False):
+            return # Jangan jalankan jika fitur dinonaktifkan
+
+        while True:
+            check_interval = LIVE_TRADING_CONFIG.get("trailing_sl_check_interval", 3)
+            await asyncio.sleep(check_interval) # Periksa sesuai interval di config
+            active_symbols = list(self.active_positions.keys())
+            if not active_symbols:
+                continue
+
+            try:
+                tickers = await self.exchange.fetch_tickers(active_symbols)
+                for symbol in active_symbols:
+                    pos_info = self.active_positions.get(symbol)
+                    ticker = tickers.get(symbol)
+                    if not pos_info or not ticker or 'sl_price' not in pos_info: continue
+
+                    mark_price = ticker['mark']
+                    entry_price = pos_info['entryPrice']
+                    initial_sl = pos_info['initial_sl'] # Kita butuh SL awal untuk kalkulasi RR
+                    direction = "LONG" if float(pos_info['positionAmt']) > 0 else "SHORT"
+                    
+                    # Hitung RR saat ini
+                    risk_distance = abs(entry_price - initial_sl)
+                    if risk_distance == 0: continue
+                    current_profit_distance = abs(mark_price - entry_price)
+                    current_rr = current_profit_distance / risk_distance
+
+                    trigger_rr = LIVE_TRADING_CONFIG.get("trailing_sl_trigger_rr", 1.0)
+
+                    # Jika trade sudah mencapai target untuk memulai trailing
+                    if current_rr >= trigger_rr:
+                        if not pos_info.get('trailing_sl_active', False):
+                            pos_info['trailing_sl_active'] = True
+                            log_msg = f"TRAILING_SL_ACTIVATED: {symbol} mencapai {current_rr:.2f}R. Trailing Stop Loss aktif."
+                            console.log(f"[bold cyan]{log_msg}[/bold cyan]")
+                            await self.log_event(log_msg)
+
+                        # Hitung level Trailing SL yang baru
+                        atr_val = self.historical_data[symbol].iloc[-1][f"ATRr_{CONFIG['atr_period']}"]
+                        trail_dist = atr_val * LIVE_TRADING_CONFIG.get("trailing_sl_distance_atr", 1.5)
+                        
+                        new_sl = mark_price - trail_dist if direction == "LONG" else mark_price + trail_dist
+                        
+                        # Hanya update jika SL baru lebih baik (mengunci lebih banyak profit)
+                        if (direction == "LONG" and new_sl > pos_info['sl_price']) or \
+                           (direction == "SHORT" and new_sl < pos_info['sl_price']):
+                            pos_info['sl_price'] = new_sl
+                            # Tidak perlu log setiap kali SL bergerak untuk menghindari spam
+
+            except Exception as e:
+                console.log(f"[red]Error di trailing_stop_manager: {e}[/red]")
 
     async def main_loop(self):
         """Loop utama untuk mendengarkan data kline dari semua simbol."""
@@ -663,7 +847,22 @@ class LiveTrader:
         processor_task = self.signal_processor()
         # Buat task untuk memantau posisi dan order
         manager_task = self.position_manager()
-        await asyncio.gather(*kline_tasks, processor_task, manager_task)
+        # --- FITUR BARU: Jalankan task untuk memantau volume trade real-time ---
+        trade_watcher_tasks = [self.watch_trades_loop(symbol) for symbol in self.symbols]
+
+        # Kumpulkan semua task yang akan dijalankan
+        all_tasks = [*kline_tasks, *trade_watcher_tasks, processor_task, manager_task]
+        
+        # --- PERBAIKAN: Jalankan task exit canggih hanya jika diaktifkan ---
+        if LIVE_TRADING_CONFIG.get("use_advanced_exit_logic", True):
+            console.log("[bold cyan]Mode Exit Canggih Aktif:[/bold cyan] Menggunakan SL/TP manual, Circuit Breaker, dan Trailing Stop.")
+            # Jalankan semua task untuk strategi exit canggih
+            all_tasks.append(self.check_manual_sl_tp())
+            all_tasks.append(self.volatility_circuit_breaker())
+            all_tasks.append(self.trailing_stop_manager())
+
+        # Jalankan semua task yang sudah dikumpulkan
+        await asyncio.gather(*all_tasks)
 
     async def watch_ohlcv_loop(self, symbol):
         """Loop tak terbatas untuk satu simbol, menangani koneksi ulang."""
@@ -685,6 +884,35 @@ class LiveTrader:
                 log_msg = f"WEBSOCKET_ERROR: {symbol} - {e}. Reconnecting..."
                 await self.log_event(log_msg)
                 console.log(f"[bold red]Websocket error untuk {symbol}: {e}. Mencoba menghubungkan ulang dalam 30 detik...[/bold red]")
+                await asyncio.sleep(30)
+
+    # --- FITUR BARU: Pemantau Volume Trade Real-time ---
+    async def watch_trades_loop(self, symbol):
+        """Memantau stream trade publik untuk mengakumulasi volume secara real-time."""
+        while True:
+            try:
+                console.log(f"Memulai websocket trade volume untuk [cyan]{symbol}[/cyan]...")
+                while True:
+                    trades = await self.exchange.watch_trades(symbol)
+                    if not trades: continue
+
+                    now = datetime.now()
+                    current_minute = now.minute
+
+                    # Inisialisasi atau reset tracker setiap 5 menit
+                    if symbol not in self.trade_volume_tracker or (current_minute % 5 == 0 and (now - self.trade_volume_tracker[symbol]['last_update']).total_seconds() > 60):
+                        self.trade_volume_tracker[symbol] = {'volume': 0.0, 'last_update': now}
+
+                    # Akumulasi volume dari trade baru
+                    for trade in trades:
+                        self.trade_volume_tracker[symbol]['volume'] += trade['amount']
+                    
+                    self.trade_volume_tracker[symbol]['last_update'] = now
+
+            except (ccxtpro.NetworkError, ccxtpro.ExchangeError) as e:
+                log_msg = f"TRADE_WATCHER_ERROR: {symbol} - {e}. Reconnecting..."
+                await self.log_event(log_msg)
+                console.log(f"[bold red]Trade watcher error untuk {symbol}: {e}. Mencoba menghubungkan ulang dalam 30 detik...[/bold red]")
                 await asyncio.sleep(30)
 
 async def main():

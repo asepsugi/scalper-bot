@@ -49,55 +49,97 @@ def signal_version_A4R(df):
     return long_signal, short_signal, exit_params
 
 def signal_version_B1(df):
-    """Strategy based on the new configurable indicator checklist."""
+    """
+    REVISED Strategy B1: Smart Regime Filter.
+    Adapts its entry logic based on market conditions (Trending, Ranging, or Volatile).
+    """
+    # --- LANGKAH 1: Tentukan Rezim Pasar ---
+    adx = df[f"ADX_{CONFIG['atr_period']}"]
+    atr_delta = df['ATR_delta'] # Indikator baru dari data_preparer
+
+    # Kondisi Rezim
+    is_trending = (adx > 23)
+    is_ranging = (adx < 18)
+    is_volatile = (atr_delta > 1.5) # Lonjakan volatilitas mendadak
+
+    # --- LANGKAH 2: Definisikan Logika Sinyal untuk Setiap Rezim ---
+    # Sinyal untuk Pasar Trending (mengikuti tren)
+    long_trending_signal = (df['close'] > df['trend_ema_15m']) & (df['rsi_15m'] > 55)
+    short_trending_signal = (df['close'] < df['trend_ema_15m']) & (df['rsi_15m'] < 45)
+
+    # Sinyal untuk Pasar Ranging (kontrarian/reversal)
+    long_ranging_signal = df['rsi_cross_long'] # Menggunakan RSI cross dari data_preparer
+    short_ranging_signal = df['rsi_cross_short']
+
+    # --- LANGKAH 3: Gabungkan Sinyal Berdasarkan Rezim Aktif ---
+    # Logika:
+    # - Jika pasar trending, gunakan sinyal trending.
+    # - Jika pasar ranging, gunakan sinyal ranging.
+    # - Jika pasar volatile, JANGAN trade (filter keamanan).
+    # - Jika tidak ada kondisi di atas (pasar "normal"), gabungkan keduanya.
+    
+    long_signal = np.where(
+        is_volatile, False, np.where(
+            is_trending, long_trending_signal, np.where(
+                is_ranging, long_ranging_signal, long_trending_signal | long_ranging_signal
+            )
+        )
+    )
+    
+    short_signal = np.where(
+        is_volatile, False, np.where(
+            is_trending, short_trending_signal, np.where(
+                is_ranging, short_ranging_signal, short_trending_signal | short_ranging_signal
+            )
+        )
+    )
+
+    # --- LANGKAH 4: Tentukan Parameter Exit ---
+    # Parameter exit bisa tetap sederhana atau dibuat dinamis juga
     exit_params = {
-        'sl_multiplier': 1.5 if CONFIG.get('strategy_b1_indicators', {}).get('atr_exit', False) else 1.2,
-        'rr_ratio': 2.5 / 1.5 if CONFIG.get('strategy_b1_indicators', {}).get('atr_exit', False) else CONFIG['risk_reward_ratio']
+        'sl_multiplier': 1.8,
+        'rr_ratio': 1.6
     }
 
-    cfg = CONFIG["strategy_b1_indicators"]
-    
-    # --- Build filter conditions based on config ---
-    # 1. EMA Trend Filter
-    long_ema_filter = (df['close'] > df['trend_ema_200_15m']) & (df['trend_ema_15m'] > df['trend_ema_200_15m']) if cfg['ema_trend'] else pd.Series(True, index=df.index)
-    short_ema_filter = (df['close'] < df['trend_ema_200_15m']) & (df['trend_ema_15m'] < df['trend_ema_200_15m']) if cfg['ema_trend'] else pd.Series(True, index=df.index)
+    # Konversi hasil np.where (array) kembali ke pandas Series
+    return pd.Series(long_signal, index=df.index), pd.Series(short_signal, index=df.index), exit_params
 
-    # 2. RSI Confirmation
-    long_rsi_filter = ((df['rsi_15m'].shift(1) < 45) & (df['rsi_15m'] > 45) & (df['rsi_1h'] > 50)) if cfg['rsi_confirm'] else pd.Series(True, index=df.index)
-    short_rsi_filter = ((df['rsi_15m'].shift(1) > 55) & (df['rsi_15m'] < 55) & (df['rsi_1h'] < 50)) if cfg['rsi_confirm'] else pd.Series(True, index=df.index)
+def signal_version_C1(df):
+    """
+    EMA Pullback Rider: Identifies a strong trend and enters on a pullback to a short-term EMA.
+    Designed to work well with limit order entries.
+    """
+    exit_params = {
+        'sl_multiplier': 1.5,
+        'rr_ratio': 1.8
+    }
 
-    # 3. ADX Filter
-    adx_filter = (df[f"ADX_{CONFIG['atr_period']}"] > 15) if cfg['adx_filter'] else pd.Series(True, index=df.index)
+    # 1. Filter Tren Makro (Timeframe 1 Jam)
+    # Tren dianggap kuat jika harga berada di atas EMA 200 pada timeframe 1 jam.
+    long_macro_trend = (df['close'] > df['trend_ema_200_15m']) # Menggunakan 15m sebagai proxy yang lebih cepat
+    short_macro_trend = (df['close'] < df['trend_ema_200_15m'])
 
-    # 5. EMA9 Trigger
-    long_ema9_trigger = (df['close'] > df['EMA_9']) if cfg['ema9_trigger'] else pd.Series(True, index=df.index)
-    short_ema9_trigger = (df['close'] < df['EMA_9']) if cfg['ema9_trigger'] else pd.Series(True, index=df.index)
+    # 2. Filter Momentum (Timeframe 15 Menit)
+    # Momentum dianggap kuat jika RSI 15m berada di zona bullish/bearish.
+    long_momentum = (df['rsi_15m'] > 55)
+    short_momentum = (df['rsi_15m'] < 45)
 
-    # 6. Volume Filter
-    if cfg['volume_filter']:
-        vol_col = f"VOL_{CONFIG['volume_lookback']}"
-        if vol_col in df.columns:
-            volume_filter = (df['volume'] > df[vol_col])
-        else:
-            volume_filter = pd.Series(False, index=df.index) # Jika kolom tidak ada, jangan beri sinyal
-    else:
-        volume_filter = pd.Series(True, index=df.index)
+    # 3. Pemicu Entry (Pullback pada Timeframe 5 Menit)
+    # Sinyal muncul ketika harga menyentuh EMA 9 dari atas (untuk long) atau dari bawah (untuk short).
+    # Ini adalah sinyal pullback klasik.
+    long_pullback = (df['low'] <= df['EMA_9']) & (df['close'] > df['EMA_9'])
+    short_pullback = (df['high'] >= df['EMA_9']) & (df['close'] < df['EMA_9'])
 
-    # 7. ATR Percentile Filter (Regime Filter)
-    if cfg.get('atr_percentile_filter', False): # Gunakan .get() agar aman jika key tidak ada
-        atr_col = f"ATRr_{CONFIG['atr_period']}"
-        if atr_col in df.columns:
-            # Hitung persentil ke-40 dari ATR dalam ~7 hari terakhir (288 candle 5m/hari * 7 hari = 2016)
-            atr_percentile_40 = df[atr_col].rolling(window=2016, min_periods=200).quantile(0.40).bfill()
-            atr_percentile_filter = (df[atr_col] > atr_percentile_40)
-        else:
-            atr_percentile_filter = pd.Series(False, index=df.index)
-    else:
-        atr_percentile_filter = pd.Series(True, index=df.index)
+    # 4. Filter Volatilitas (ATR)
+    # Hanya trade jika pasar memiliki volatilitas yang cukup (ATR di atas persentil ke-30).
+    # Ini menghindari pasar yang terlalu datar.
+    atr_col = f"ATRr_{CONFIG['atr_period']}"
+    atr_percentile_30 = df[atr_col].rolling(window=1440, min_periods=200).quantile(0.30).bfill()
+    volatility_filter = (df[atr_col] > atr_percentile_30)
 
-    # --- Combine all active filters ---
-    long_signal = long_ema_filter & long_rsi_filter & adx_filter & long_ema9_trigger & volume_filter & atr_percentile_filter
-    short_signal = short_ema_filter & short_rsi_filter & adx_filter & short_ema9_trigger & volume_filter & atr_percentile_filter
+    # Gabungkan semua kondisi
+    long_signal = long_macro_trend & long_momentum & long_pullback & volatility_filter
+    short_signal = short_macro_trend & short_momentum & short_pullback & volatility_filter
 
     return long_signal, short_signal, exit_params
 
@@ -106,14 +148,18 @@ def signal_version_B1(df):
 STRATEGY_CONFIG = {
     "AdaptiveTrendRide(A3)": {
         "function": signal_version_A3,
-        "weight": 0.8
-    # },
-    # "ReversalMomentumRider(A4R)": {
-    #     "function": signal_version_A4R,
-    #     "weight": 1.0
+        "weight": 1.0
     },
-    "VolatilityScalper(B1)": {
+    "ReversalMomentumRider(A4R)": {
+        "function": signal_version_A4R,
+        "weight": 1.0
+    },
+    "SmartRegimeScalper(B1)": {
         "function": signal_version_B1,
-        "weight": 1.2 # Contoh: B1 sedikit kurang dipercaya, jadi bobotnya lebih rendah
+        "weight": 1.0 
+    },
+    "EMAPullbackRider(C1)": {
+        "function": signal_version_C1,
+        "weight": 1.2 # Beri bobot sedikit lebih tinggi karena dirancang untuk sistem ini
     }
 }

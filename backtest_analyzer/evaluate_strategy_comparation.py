@@ -24,6 +24,7 @@ from montecarlo import run_monte_carlo_simulation
 from sensitivity import run_sensitivity_analysis
 from report_generator import generate_full_report
 from slippage_model import estimate_slippage_impact
+from rich.console import Console
 
 
 def main():
@@ -31,7 +32,7 @@ def main():
     parser.add_argument(
         "filepath",
         type=str,
-        help="Path to the JSON file with backtest results (e.g., 'metrics_BTCUSDT.json')."
+        help="Path to the JSON file with portfolio backtest results (e.g., 'strategy_comparison_results.json')."
     )
     parser.add_argument("--show_plots", action="store_true", help="Tampilkan grafik interaktif.")
     parser.add_argument("--export_pdf", action="store_true", help="Generate PDF report")
@@ -41,38 +42,67 @@ def main():
     parser.add_argument("--final-weights", type=str, default="0.5,0.3,0.2", help="Comma-separated weights for final score (effectiveness,SI,ES).")
     args = parser.parse_args()
 
+    console = Console()
+
     # Setup direktori output
     output_dir = get_project_root() / 'output'
     plots_dir = output_dir / 'plots'
 
     # 1. Muat hasil backtest
-    results = load_backtest_results(args.filepath)
-    if not results:
+    all_symbol_results = load_backtest_results(args.filepath)
+    if not all_symbol_results:
         logging.error("Tidak ada data untuk dianalisis. Keluar.")
         return
 
+    # --- PERBAIKAN BESAR: Agregasi hasil per strategi ---
+    console.log(f"Loaded {len(all_symbol_results)} results across multiple symbols. Aggregating by strategy version...")
+    df = pd.DataFrame(all_symbol_results)
+
+    # Ganti nilai inf dengan NaN untuk perhitungan yang aman
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+    agg_results = df.groupby('version').agg(
+        # Metrik yang dijumlahkan
+        total_trades=('total_trades', 'sum'),
+        # Metrik yang dirata-ratakan
+        net_profit_pct=('net_profit_pct', 'mean'),
+        win_rate=('win_rate', 'mean'),
+        avg_rr=('avg_rr', 'mean'),
+        profit_factor=('profit_factor', 'mean'),
+        max_drawdown=('max_drawdown', 'mean'), # Rata-rata drawdown adalah proxy yang baik
+        sharpe_ratio=('sharpe_ratio', 'mean'),
+        avg_trade_duration=('avg_trade_duration', 'mean'),
+        # Metrik lain
+        num_symbols_tested=('symbol', 'nunique')
+    ).reset_index()
+
+    # Konversi hasil agregasi kembali ke format list of dictionaries
+    aggregated_metrics_list = agg_results.to_dict('records')
+
     all_processed_metrics = []
 
-    for metrics in results:
+    for metrics in aggregated_metrics_list:
         version = metrics['version']
         logging.info(f"--- Menganalisis versi: {version} ---")
 
-        # Asumsikan kita punya akses ke PnL harian dari backtest asli
-        # Karena tidak ada, kita akan simulasikan PnL harian
-        # Dalam implementasi nyata, ini harus disimpan saat backtest
-        num_days = int(metrics.get('total_trades', 1) * 0.8) # Asumsi
+        # --- PERBAIKAN: Gunakan total_trades yang diagregasi untuk simulasi ---
+        num_days = int(metrics.get('total_trades', 1) * 0.5) # Asumsi: 2 trade per hari
         if num_days == 0: continue
         
         # Simulasikan daily returns berdasarkan Sharpe Ratio
         daily_std = (metrics['net_profit_pct'] / 100) / (metrics.get('sharpe_ratio', 1) * np.sqrt(252))
-        if not np.isfinite(daily_std) or daily_std == 0: daily_std = 0.01
+        # --- PERBAIKAN: Pastikan standar deviasi (scale) selalu positif ---
+        # Standar deviasi tidak boleh negatif. Ambil nilai absolutnya.
+        # Arah return (positif/negatif) sudah diatur oleh parameter 'loc'.
+        daily_std = abs(daily_std)
+        if not np.isfinite(daily_std) or daily_std == 0: daily_std = 0.001 # Gunakan nilai kecil jika std nol
         daily_returns = pd.Series(np.random.normal(
             loc=(metrics['net_profit_pct'] / 100) / 252,
             scale=daily_std,
             size=num_days
         ))
 
-        # 2. Hitung metrik risiko lanjutan
+        # 2. Hitung metrik risiko lanjutan pada data agregat
         metrics = calculate_advanced_metrics(metrics, daily_returns)
 
         # 3. Jalankan Monte Carlo
@@ -82,7 +112,7 @@ def main():
         metrics['mc_p95_equity'] = np.percentile(final_equities, 95)
         metrics['mc_prob_loss'] = (final_equities < 10000).mean()
 
-        # 4. Jalankan Analisis Sensitivitas
+        # 4. Jalankan Analisis Sensitivitas pada data agregat
         sensitivity_results = run_sensitivity_analysis(
             daily_returns, metrics['total_trades'], metrics['avg_rr'], metrics['win_rate'], args.slippage_max
         )

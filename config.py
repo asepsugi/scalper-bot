@@ -61,7 +61,16 @@ LIVE_TRADING_CONFIG = {
     "risk_per_trade": 0.005, # Risiko per trade untuk live trading (0.5% dari balance)
     "max_margin_usage_pct": 0.80, # Batas maksimum total margin yang digunakan dari total balance (misal: 0.80 = 80%),
     # --- REVISI: Gunakan rasio untuk ambang batas yang sepenuhnya dinamis ---
-    "consensus_ratio": 0.55 # Dibutuhkan 55% dari total bobot skor untuk mencapai konsensus.
+    "consensus_ratio": 0.55, # Dibutuhkan 55% dari total bobot skor untuk mencapai konsensus.
+    # --- FITUR BARU: Pengaturan Circuit Breaker ---
+    "circuit_breaker_multiplier": 1.5, # Keluar jika harga menembus SL sejauh 1.5x jarak SL awal (artinya 50% lebih jauh dari SL).
+    # --- FITUR BARU: Pengaturan Trailing Stop Loss ---
+    "trailing_sl_enabled": True, # Aktifkan/nonaktifkan Trailing SL
+    "trailing_sl_trigger_rr": 1.0, # Mulai trailing saat trade mencapai 1.0x Risk/Reward
+    "trailing_sl_distance_atr": 1.5, # Jarak trailing stop dari harga saat ini (dalam kelipatan ATR)
+    "trailing_sl_check_interval": 3, # Seberapa sering (dalam detik) untuk memeriksa & memperbarui trailing SL
+    # --- FITUR BARU: Pilihan Strategi Exit ---
+    "use_advanced_exit_logic": False # True: Gunakan SL/TP manual, circuit breaker, trailing. False: Gunakan SL/TP statis dari bursa.
 }
 
 # Biaya dan Slippage

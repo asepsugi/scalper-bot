@@ -14,7 +14,7 @@ from rich.table import Table
 
 from utils.common_utils import get_dynamic_risk_params, get_all_futures_symbols
 from config import CONFIG, FEES, SLIPPAGE, LEVERAGE_MAP, LIVE_TRADING_CONFIG, API_KEYS
-from indicators import fetch_binance_data_sync # REVISI: Impor versi sinkron
+from indicators import fetch_binance_data_sync, calculate_indicators # REVISI: Impor versi sinkron
 from utils.data_preparer import prepare_data
 from strategies import STRATEGY_CONFIG
 
@@ -42,15 +42,20 @@ class PortfolioBacktester:
         for i, symbol in enumerate(symbols):
             try:
                 console.log(f"({i+1}/{len(symbols)}) Fetching data for [bold cyan]{symbol}[/bold cyan]...")
-                result = self.fetch_and_prepare_symbol_data(symbol, limit)
-                if result is not None:
-                    all_data[symbol] = result
-                    console.log(f"({i+1}/{len(symbols)}) Successfully processed [bold cyan]{symbol}[/bold cyan]")
+                # PERBAIKAN: Bongkar tuple hasil kembalian ke dalam dua variabel
+                result_df, from_cache = self.fetch_and_prepare_symbol_data(symbol, limit)
+                if result_df is not None and not result_df.empty:
+                    all_data[symbol] = result_df
+                    console.log(f"({i+1}/{len(symbols)}) Successfully processed [bold cyan]{symbol}[/bold cyan] (from cache: {not from_cache})")
                 else:
                     console.log(f"({i+1}/{len(symbols)}) [yellow]Skipping {symbol} due to data issues.[/yellow]")
                 
-                # Tambahkan jeda 1 detik di antara setiap panggilan API untuk keamanan
-                time.sleep(1) 
+                # --- PERBAIKAN: Hanya sleep jika data diambil dari API, bukan dari cache ---
+                if not from_cache:
+                    console.log("   [dim]Data fetched from API, sleeping for 1s to respect rate limits...[/dim]")
+                    time.sleep(1)
+                else:
+                    time.sleep(0.05) # Beri jeda sangat singkat agar tidak membebani CPU
             except Exception as exc:
                 console.log(f"({i+1}/{len(symbols)}) [bold red]Error processing {symbol}: {exc}[/bold red]")
 
@@ -121,57 +126,36 @@ class PortfolioBacktester:
         if not all_signals:
             console.log("[bold red]No signals found across any symbols.[/bold red]")
             return
-
-        # 3. Sort all signals chronologically
+        
+        # --- PERBAIKAN BESAR: Beralih ke simulasi berbasis waktu (kronologis) ---
+        # 1. Gabungkan semua data dan sinyal ke dalam satu timeline
         sorted_signals = sorted(all_signals, key=lambda x: x['timestamp'])
-        console.log(f"Found a total of {len(sorted_signals)} signals across all symbols. Starting chronological simulation...")
+        signals_by_time = {s['timestamp']: [] for s in sorted_signals}
+        for s in sorted_signals:
+            signals_by_time[s['timestamp']].append(s)
 
-        # --- OPTIMISASI: Lacak waktu terakhir yang diproses ---
-        last_processed_time = None
-        if sorted_signals:
-            # Mulai dari waktu sebelum sinyal pertama
-            last_processed_time = sorted_signals[0]['timestamp'] - pd.Timedelta(minutes=1)
+        # 2. Dapatkan semua timestamp unik dari semua data dan sinyal, lalu urutkan
+        all_timestamps = set(signals_by_time.keys())
+        for symbol_data in all_data.values():
+            all_timestamps.update(symbol_data.index)
+        
+        sorted_timestamps = sorted(list(all_timestamps))
+        console.log(f"Starting chronological simulation across {len(sorted_timestamps)} unique timestamps...")
 
-        # 4. Process signals one by one in time order
-        for signal in sorted_signals:
-            symbol = signal['symbol']
-            strategy_name = signal['strategy']
-            # --- REVISI: Pastikan timestamp adalah objek Timestamp yang tz-aware ---
-            signal_time = pd.to_datetime(signal['timestamp'], utc=True)
+        # 3. Loop melalui setiap timestamp
+        for i in range(len(sorted_timestamps) - 1):
+            current_time = sorted_timestamps[i]
+            next_time = sorted_timestamps[i+1]
 
-            # --- OPTIMISASI: Hanya proses candle baru sejak pengecekan terakhir ---
-            # 1. Periksa exit dan pending order untuk semua candle BARU
-            self.check_trades_and_orders(last_processed_time, signal_time, all_data)
+            # A. Periksa exit, trailing stop, dan pending order di setiap candle
+            self.check_trades_and_orders(current_time, next_time, all_data)
 
-            # 3. Process the new signal
-            # Check if we are already in a position OR have a pending order for this symbol
-            # (Pengecekan ini dilakukan setelah check_trades_and_orders untuk memastikan state terbaru)
-            if symbol in self.active_positions:
-                continue
-
-            # Find the signal row in the original dataframe to get all necessary data
-            full_data = all_data[symbol]
-            signal_row = full_data.loc[signal_time]
-            
-            signal_row_dict = signal_row.to_dict()
-            signal_row_dict['signal'] = signal['signal']
-            signal_row_dict['strategy'] = strategy_name
-            
-            # Re-fetch the correct exit_params for the specific strategy
-            # --- REVISI: Ambil fungsi dari STRATEGY_CONFIG ---
-            signal_function = STRATEGY_CONFIG[strategy_name]['function']
-            _, _, exit_params = signal_function(full_data)
-
-            # --- REVISI: Pindahkan pengambilan parameter dinamis ke sini ---
-            # Ini memastikan parameter yang benar diteruskan ke create_pending_order
-            risk_params = get_dynamic_risk_params(self.balance)
-            current_risk_per_trade = risk_params['risk_per_trade']
-            default_leverage = risk_params['default_leverage']
-
-            self.create_pending_order(signal_row_dict, signal_time, full_data, exit_params, symbol, current_risk_per_trade, default_leverage)
-
-            # --- OPTIMISASI: Perbarui waktu terakhir yang diproses ---
-            last_processed_time = signal_time
+            # B. Proses sinyal baru yang muncul pada timestamp ini
+            if current_time in signals_by_time:
+                for signal in signals_by_time[current_time]:
+                    # Cek jika sudah ada posisi/order, lalu buat pending order
+                    # (Logika ini dipindahkan ke dalam fungsi baru)
+                    self.process_new_signal(signal, all_data)
 
         # Final check for any remaining open trades at the end of the data
         # --- REVISI: Gunakan timestamp terakhir dari data masing-masing simbol ---
@@ -207,16 +191,55 @@ class PortfolioBacktester:
         limit_15m = (limit // 3) + buffer
         limit_1h = (limit // 12) + buffer
         
-        # REVISI: Panggil fungsi sinkron yang baru
-        df_5m = fetch_binance_data_sync(self.exchange, symbol, '5m', limit=limit, use_cache=True) if self.exchange else None
-        df_15m = fetch_binance_data_sync(self.exchange, symbol, '15m', limit=limit_15m, use_cache=True) if self.exchange else None
-        df_1h = fetch_binance_data_sync(self.exchange, symbol, '1h', limit=limit_1h, use_cache=True) if self.exchange else None
+        # Langkah 1: Ambil data mentah
+        df_5m, from_cache_5m = fetch_binance_data_sync(self.exchange, symbol, '5m', limit=limit, use_cache=True)
+        df_15m, from_cache_15m = fetch_binance_data_sync(self.exchange, symbol, '15m', limit=limit_15m, use_cache=True)
+        df_1h, from_cache_1h = fetch_binance_data_sync(self.exchange, symbol, '1h', limit=limit_1h, use_cache=True)
 
         if any(df is None for df in [df_5m, df_15m, df_1h]):
-            return None
+            return None, False # Kembalikan status 'from_cache'
+
+        # --- PERBAIKAN FINAL: Hitung indikator di sini SEBELUM prepare_data ---
+        # Ini memastikan semua kolom (termasuk VOL_20) ada di DataFrame mentah.
+        df_5m = calculate_indicators(df_5m)
+        df_15m = calculate_indicators(df_15m)
+        df_1h = calculate_indicators(df_1h)
 
         base_data = prepare_data(df_5m, df_15m, df_1h)
-        return base_data
+        # Jika salah satu data diambil dari API, anggap seluruh proses tidak dari cache
+        was_api_call = not (from_cache_5m and from_cache_15m and from_cache_1h)
+        return base_data, not was_api_call
+
+    def process_new_signal(self, signal, all_data):
+        """Memproses satu sinyal baru: validasi dan buat pending order."""
+        symbol = signal['symbol']
+        strategy_name = signal['strategy']
+        signal_time = pd.to_datetime(signal['timestamp'], utc=True)
+
+        # Jangan proses jika sudah ada posisi atau pending order
+        if symbol in self.active_positions or symbol in self.pending_orders:
+            return
+
+        full_data = all_data[symbol]
+        try:
+            signal_row = full_data.loc[signal_time]
+        except KeyError:
+            # Kasus langka jika sinyal ada tapi data tidak, lewati.
+            return
+        
+        signal_row_dict = signal_row.to_dict()
+        signal_row_dict['signal'] = signal['signal']
+        signal_row_dict['strategy'] = strategy_name
+        
+        signal_function = STRATEGY_CONFIG[strategy_name]['function']
+        _, _, exit_params = signal_function(full_data)
+
+        risk_params = get_dynamic_risk_params(self.balance)
+        current_risk_per_trade = risk_params['risk_per_trade']
+        default_leverage = risk_params['default_leverage']
+
+        self.create_pending_order(signal_row_dict, signal_time, full_data, exit_params, symbol, current_risk_per_trade, default_leverage)
+
 
     def check_trades_and_orders(self, start_time, end_time, all_data):
         """
@@ -245,17 +268,81 @@ class PortfolioBacktester:
 
             exit_reason = None
             for idx, candle in candles_to_check.iterrows():
-                if (trade_details['direction'] == 'LONG' and candle['low'] <= trade_details['sl_price']) or \
-                   (trade_details['direction'] == 'SHORT' and candle['high'] >= trade_details['sl_price']):
-                    exit_price = trade_details['sl_price']
+                # --- FITUR BARU: Simulasi Trailing Stop Loss ---
+                if LIVE_TRADING_CONFIG.get("trailing_sl_enabled", False):
+                    # Cek apakah trailing sudah aktif atau perlu diaktifkan
+                    is_trailing_active = trade_details.get('trailing_sl_active', False)
+                    
+                    # Hitung RR saat ini untuk memicu trailing
+                    risk_distance = abs(trade_details['entry_price'] - trade_details['initial_sl'])
+                    if risk_distance > 0:
+                        current_profit_distance = abs(candle['close'] - trade_details['entry_price'])
+                        current_rr = current_profit_distance / risk_distance
+                        trigger_rr = LIVE_TRADING_CONFIG.get("trailing_sl_trigger_rr", 1.0)
+
+                        if not is_trailing_active and current_rr >= trigger_rr:
+                            trade_details['trailing_sl_active'] = True
+                            is_trailing_active = True
+                            # Log saat pertama kali trailing aktif (opsional, bisa membuat log sangat ramai)
+                            # console.log(f"[cyan]Trailing SL activated for {symbol} at {idx}[/cyan]")
+
+                    # Jika trailing aktif, perbarui level SL
+                    if is_trailing_active:
+                        atr_val = candle[f"ATRr_{CONFIG['atr_period']}"]
+                        trail_dist = atr_val * LIVE_TRADING_CONFIG.get("trailing_sl_distance_atr", 1.5)
+                        
+                        if trade_details['direction'] == 'LONG':
+                            # PERBAIKAN: Gunakan harga 'close' untuk trailing agar lebih realistis
+                            new_sl = candle['close'] - trail_dist
+                            # Hanya update jika SL baru lebih baik (lebih tinggi)
+                            trade_details['sl_price'] = max(trade_details['sl_price'], new_sl)
+                        else: # SHORT
+                            # PERBAIKAN: Gunakan harga 'close' untuk trailing agar lebih realistis
+                            new_sl = candle['close'] + trail_dist
+                            trade_details['sl_price'] = min(trade_details['sl_price'], new_sl)
+
+                # --- PERBAIKAN: Implementasi simulasi Circuit Breaker ---
+                # Periksa kondisi darurat SEBELUM memeriksa SL/TP normal.
+                cb_multiplier = LIVE_TRADING_CONFIG.get("circuit_breaker_multiplier", 1.5)
+                # PERBAIKAN: Gunakan initial_sl untuk ambang batas yang konsisten, sama seperti di live_trader.
+                sl_breach_threshold = abs(trade_details['entry_price'] - trade_details['initial_sl']) * (cb_multiplier - 1.0)
+                
+                price_breached = False
+                if trade_details['direction'] == 'LONG' and candle['low'] < (trade_details['sl_price'] - sl_breach_threshold):
+                    price_breached = True
+                    exit_price = trade_details['sl_price'] - sl_breach_threshold # Asumsi exit di harga terburuk
+                elif trade_details['direction'] == 'SHORT' and candle['high'] > (trade_details['sl_price'] + sl_breach_threshold):
+                    price_breached = True
+                    exit_price = trade_details['sl_price'] + sl_breach_threshold # Asumsi exit di harga terburuk
+
+                # --- PERBAIKAN: Tambahkan konfirmasi volume untuk Circuit Breaker ---
+                if price_breached:
+                    # Dapatkan rata-rata volume dari data lengkap
+                    avg_volume = full_data.loc[idx, f"VOL_{CONFIG['volume_lookback']}"]
+                    volume_spike_multiplier = 2.0 # Anggap lonjakan jika volume > 2x rata-rata
+
+                    if candle['volume'] > (avg_volume * volume_spike_multiplier):
+                        exit_time = idx
+                        exit_reason = "Circuit Breaker"
+                        break # Keluar dari loop, trade ditutup
+
+                # Dapatkan SL price terbaru setelah potensi update dari trailing stop
+                current_sl_price = trade_details['sl_price']
+
+                # --- Logika SL/TP Normal (berbasis penutupan candle) ---
+                if (trade_details['direction'] == 'LONG' and candle['close'] <= current_sl_price) or \
+                   (trade_details['direction'] == 'SHORT' and candle['close'] >= current_sl_price):
+                    exit_price = candle['close']
                     exit_time = idx
-                    exit_reason = "Stop Loss"
+                    exit_reason = "Stop Loss (Close)"
                     break
-                if (trade_details['direction'] == 'LONG' and candle['high'] >= trade_details['tp_price']) or \
-                   (trade_details['direction'] == 'SHORT' and candle['low'] <= trade_details['tp_price']):
-                    exit_price = trade_details['tp_price']
+                # --- PERBAIKAN: Abaikan TP jika trailing stop sudah aktif ---
+                if not trade_details.get('trailing_sl_active', False) and \
+                   ((trade_details['direction'] == 'LONG' and candle['close'] >= trade_details['tp_price']) or \
+                   (trade_details['direction'] == 'SHORT' and candle['close'] <= trade_details['tp_price'])):
+                    exit_price = candle['close'] # Gunakan harga penutupan sebagai harga exit
                     exit_time = idx
-                    exit_reason = "Take Profit"
+                    exit_reason = "Take Profit (Close)"
                     break
             
             if exit_reason: # Jika trade ditutup karena SL/TP
@@ -328,6 +415,7 @@ class PortfolioBacktester:
             'entry_price': entry_price, # Gunakan harga entry yang sudah disesuaikan
             'direction': order_details['direction'],
             'sl_price': order_details['sl_price'],
+            'initial_sl': order_details['initial_sl'], # PERBAIKAN: Salin initial_sl ke posisi aktif
             'tp_price': order_details['tp_price'],
             'position_size_usd': order_details['position_size_usd'],
             'margin_used': order_details['margin_used'],
@@ -366,9 +454,9 @@ class PortfolioBacktester:
         pnl_usd = pnl_pct * position_size_usd if pd.notna(pnl_pct) and pd.notna(position_size_usd) else 0.0
         net_pnl_usd = pnl_usd - total_fees
 
-        # Hanya tambahkan ke balance jika PnL valid, untuk mencegah balance menjadi NaN
-        if pd.notna(pnl_usd):
-            self.balance += pnl_usd
+        # PERBAIKAN FINAL: Gunakan net_pnl_usd untuk compounding balance yang akurat
+        if pd.notna(net_pnl_usd):
+            self.balance += net_pnl_usd # Sebelumnya: self.balance += pnl_usd
 
         self.trades.append({
             "ID": trade_details['id'],
@@ -466,6 +554,7 @@ class PortfolioBacktester:
             'limit_price': limit_price,
             'direction': direction,
             'sl_price': stop_loss_price,
+            'initial_sl': stop_loss_price, # PERBAIKAN: Simpan SL awal saat order dibuat
             'tp_price': take_profit_price,
             'position_size_usd': position_size_usd,
             'margin_used': margin_for_this_trade,
@@ -545,7 +634,12 @@ class PortfolioBacktester:
         summary_table = Table(show_header=True, header_style="bold magenta")
         summary_table.add_column("Metric")
         summary_table.add_column("Value", justify="right")
+
+        # --- PERBAIKAN: Tambahkan keterangan mode exit ---
+        exit_logic_mode = "Dinamis (Advanced)" if LIVE_TRADING_CONFIG.get("use_advanced_exit_logic", True) else "Statis (SL/TP Bursa)"
+        
         summary_table.add_row("Strategies Tested", strategy_names)
+        summary_table.add_row("Exit Logic Mode", exit_logic_mode)
         summary_table.add_row("Initial Balance", f"${self.initial_balance:,.2f}")
         summary_table.add_row("Final Balance", f"${self.balance:,.2f}")
         summary_table.add_row("Net Profit", f"[green]${net_profit:,.2f} ({net_profit_pct:+.2f}%)" if net_profit > 0 else f"[red]${net_profit:,.2f} ({net_profit_pct:.2f}%)")
@@ -699,16 +793,38 @@ class PortfolioBacktester:
         """Secara otomatis menambahkan entri baru ke BACKTEST_LOG.md."""
         log_file_path = Path('BACKTEST_LOG.md')
         console.log(f"\n[bold]Appending results to {log_file_path}...[/bold]")
+        trades_df = pd.DataFrame(self.trades)
 
-        # 1. Siapkan bagian Konfigurasi Strategi
-        strategy_table_header = "| Nama Strategi                | Fungsi                 | Bobot (Weight) | Status   |\n"
-        strategy_table_divider = "| ---------------------------- | ---------------------- | -------------- | -------- |\n"
+        # 1. Hitung performa per strategi
+        strategy_performance = pd.DataFrame()
+        if not trades_df.empty and 'Strategy' in trades_df.columns:
+            strategy_performance = trades_df.groupby('Strategy').agg(
+                total_pnl=('PnL (USD)', 'sum'),
+                total_trades=('ID', 'count'),
+                wins=('PnL (USD)', lambda pnl: (pnl > 0).sum())
+            ).reset_index()
+            strategy_performance['win_rate'] = (strategy_performance['wins'] / strategy_performance['total_trades']) * 100
+
+        # 2. Siapkan tabel gabungan: Konfigurasi + Performa
+        strategy_table_header = "| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |\n"
+        strategy_table_divider = "| ---------------------------- | ----- | --------------- | ------ | -------- |\n"
         strategy_rows = ""
         for name, config in STRATEGY_CONFIG.items():
-            # Asumsi: semua strategi di STRATEGY_CONFIG adalah yang aktif untuk run ini
-            strategy_rows += f"| `{name}`      | `{config['function'].__name__}`    | {config['weight']}            | ✅ Aktif |\n"
+            perf = strategy_performance[strategy_performance['Strategy'] == name]
+            if not perf.empty:
+                perf_row = perf.iloc[0]
+                pnl_str = f"${perf_row['total_pnl']:,.2f}"
+                trades_str = str(perf_row['total_trades'])
+                win_rate_str = f"{perf_row['win_rate']:.2f}%"
+            else:
+                # Jika strategi aktif tapi tidak menghasilkan trade
+                pnl_str = "$0.00"
+                trades_str = "0"
+                win_rate_str = "N/A"
+            
+            strategy_rows += f"| `{name}` | {config['weight']} | {pnl_str} | {trades_str} | {win_rate_str} |\n"
 
-        # 2. Siapkan bagian Hasil Ringkas
+        # 3. Siapkan bagian Hasil Ringkas
         results_table = (
             f"| Metrik            | Nilai                      |\n"
             f"| ----------------- | -------------------------- |\n"
@@ -721,15 +837,17 @@ class PortfolioBacktester:
             f"| Max Drawdown      | {kwargs['max_drawdown']:.2f}%                      |\n"
         )
 
-        # 3. Gabungkan semua menjadi satu entri log
+        # 4. Gabungkan semua menjadi satu entri log
         log_entry = (
             f"\n---\n\n"
             f"## Backtest: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
             f"**Parameter:**\n"
             f"-   **Simbol:** Top {args.max_symbols} (berdasarkan volume)\n"
             f"-   **Candles:** {args.limit}\n"
-            f"-   **Periode:** ~{kwargs['duration_str']}\n\n"
-            f"**Konfigurasi Strategi (`STRATEGY_CONFIG` saat dijalankan):**\n\n"
+            f"-   **Periode:** ~{kwargs['duration_str']}\n"
+            # --- PERBAIKAN: Tambahkan keterangan mode exit ke log markdown ---
+            f"-   **Mode Exit:** {'Dinamis (Advanced)' if LIVE_TRADING_CONFIG.get('use_advanced_exit_logic', True) else 'Statis (SL/TP Bursa)'}\n\n"
+            f"**Konfigurasi & Performa Strategi:**\n\n"
             f"{strategy_table_header}"
             f"{strategy_table_divider}"
             f"{strategy_rows}\n"
@@ -739,7 +857,7 @@ class PortfolioBacktester:
             f"-   (Isi observasi Anda di sini)\n\n"
         )
 
-        # 4. Tulis entri ke file (prepend/tambahkan di awal)
+        # 5. Tulis entri ke file (prepend/tambahkan di awal)
         original_content = log_file_path.read_text() if log_file_path.exists() else ""
         log_file_path.write_text(log_entry + original_content)
         console.log(f"[green]✅ Results successfully appended to {log_file_path}[/green]")

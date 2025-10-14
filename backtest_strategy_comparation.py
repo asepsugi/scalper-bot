@@ -4,11 +4,15 @@ import json
 import numpy as np
 from datetime import time
 from pathlib import Path
+from rich.console import Console
+from rich.table import Table
+import asyncio
 
-from config import CONFIG
-from indicators import fetch_binance_data, calculate_indicators
+from config import CONFIG, LIVE_TRADING_CONFIG, FEES, SLIPPAGE
+from indicators import fetch_binance_data_sync, calculate_indicators
 from utils.data_preparer import prepare_data
-from strategies import STRATEGY_MAP
+from utils.common_utils import get_all_futures_symbols
+from strategies import STRATEGY_CONFIG
 
 def evaluate_statistical_validity(metrics):
     """Analyzes a single strategy's metrics for statistical validity and effectiveness."""
@@ -78,136 +82,197 @@ class Backtester:
     def __init__(self, symbol, initial_balance, risk_per_trade, rr_ratio):
         self.symbol = symbol
         self.initial_balance = initial_balance
+        self.balance = initial_balance
         self.risk_per_trade = risk_per_trade
         self.rr_ratio = rr_ratio
+        self.trades = []
+        self.trade_id_counter = 0
+        self.active_position = None # Hanya satu posisi aktif pada satu waktu untuk perbandingan
+        self.pending_order = None # Hanya satu pending order pada satu waktu
 
     def run(self, version_name, signal_function, base_data):
         self.balance = self.initial_balance
         self.trades = []
-        self.in_position = False
+        self.active_position = None
+        self.pending_order = None
+        self.trade_id_counter = 0
         
         df = base_data.copy()
         long_signals, short_signals, exit_params = signal_function(df)
         df.loc[long_signals, 'signal'] = 'LONG'
         df.loc[short_signals, 'signal'] = 'SHORT'
 
-        signals_df = df[df['signal'].isin(['LONG', 'SHORT'])].copy()
-
-        if signals_df.empty:
+        all_signals = df[df['signal'].isin(['LONG', 'SHORT'])].copy()
+        if all_signals.empty:
             return self.get_results(version_name)
 
-        for _, row in signals_df.iterrows():
-            if not self.in_position:
-                self.simulate_trade(row, base_data, exit_params)
+        # --- REVISI: Implementasi simulasi kronologis seperti market_scanner ---
+        sorted_timestamps = sorted(list(df.index))
+
+        for i in range(len(sorted_timestamps) - 1):
+            current_time = sorted_timestamps[i]
+            next_time = sorted_timestamps[i+1]
+
+            # A. Periksa exit, trailing stop, dan pending order
+            self.check_trade_and_order(current_time, next_time, df)
+
+            # B. Proses sinyal baru yang muncul pada timestamp ini
+            if current_time in all_signals.index:
+                signal_row = all_signals.loc[current_time]
+                # Hanya proses jika tidak ada posisi aktif atau pending order
+                if not self.active_position and not self.pending_order:
+                    self.create_pending_order(signal_row, df, exit_params)
+
+        # Tutup posisi yang masih terbuka di akhir data
+        if self.active_position:
+            last_candle = df.iloc[-1]
+            self.close_trade(last_candle['close'], last_candle.name, "End of Data")
 
         return self.get_results(version_name)
 
-    def simulate_trade(self, signal_row, full_data, exit_params):
-        self.in_position = True
-        entry_price = signal_row['close']
+    def create_pending_order(self, signal_row, full_data, exit_params):
+        """Membuat pending order, meniru logika market_scanner."""
+        signal_price = signal_row['close']
         direction = signal_row['signal']
         atr_val = signal_row[f"ATRr_{CONFIG['atr_period']}"]
-        
-        # Ambil parameter SL/TP dari dictionary exit_params
+
+        limit_offset_pct = 0.001
+        limit_price = signal_price * (1 - limit_offset_pct) if direction == 'LONG' else signal_price * (1 + limit_offset_pct)
+        expiration_candles = 10
+
         sl_multiplier = exit_params['sl_multiplier']
         rr_ratio = exit_params['rr_ratio']
 
-        # --- REVISI: Handle numpy array dari strategi dinamis ---
-        # Jika multiplier adalah array/series, ambil nilai yang sesuai dengan indeks sinyal
-        if isinstance(sl_multiplier, pd.Series):
-            sl_multiplier = sl_multiplier.loc[signal_row.name]
-        elif isinstance(sl_multiplier, np.ndarray):
-            # Untuk numpy array, kita butuh indeks integer, bukan timestamp
-            idx = full_data.index.get_loc(signal_row.name)
-            sl_multiplier = sl_multiplier[idx]
-        if isinstance(rr_ratio, pd.Series):
-            rr_ratio = rr_ratio.loc[signal_row.name]
-        elif isinstance(rr_ratio, np.ndarray):
-            # Also handle numpy array for rr_ratio
-            idx = full_data.index.get_loc(signal_row.name)
-            rr_ratio = rr_ratio[idx]
+        # --- PERBAIKAN: Tangani parameter dinamis (Series atau ndarray) ---
+        # Beberapa strategi mengembalikan SL/TP sebagai array untuk setiap candle.
+        # Kita perlu mengambil nilai yang sesuai dengan timestamp sinyal saat ini.
+        if isinstance(sl_multiplier, (pd.Series, np.ndarray)):
+            # Dapatkan posisi integer dari timestamp sinyal di dalam DataFrame
+            idx_pos = full_data.index.get_loc(signal_row.name)
+            sl_multiplier = sl_multiplier[idx_pos] if isinstance(sl_multiplier, np.ndarray) else sl_multiplier.iloc[idx_pos]
+        if isinstance(rr_ratio, (pd.Series, np.ndarray)):
+            idx_pos = full_data.index.get_loc(signal_row.name)
+            rr_ratio = rr_ratio[idx_pos] if isinstance(rr_ratio, np.ndarray) else rr_ratio.iloc[idx_pos]
 
         stop_loss_dist = atr_val * sl_multiplier
-        take_profit_dist = stop_loss_dist * rr_ratio
+        if stop_loss_dist <= 0: return
 
-        if direction == 'LONG':
-            stop_loss_price = entry_price - stop_loss_dist
-            take_profit_price = entry_price + take_profit_dist
-        else: # SHORT
-            stop_loss_price = entry_price + stop_loss_dist
-            take_profit_price = entry_price - take_profit_dist
+        risk_amount_usd = self.balance * self.risk_per_trade
+        stop_loss_pct = stop_loss_dist / limit_price
+        if stop_loss_pct <= 0: return
 
-        future_candles = full_data.loc[signal_row.name:].iloc[1:]
+        position_size_usd = risk_amount_usd / stop_loss_pct
+
+        stop_loss_price = limit_price - stop_loss_dist if direction == 'LONG' else limit_price + stop_loss_dist
+        take_profit_price = limit_price + (stop_loss_dist * rr_ratio) if direction == 'LONG' else limit_price - (stop_loss_dist * rr_ratio)
         
-        # --- REVISI: Handle sinyal pada candle terakhir ---
-        # Jika tidak ada candle masa depan, lewati trade ini.
-        if future_candles.empty:
-            self.in_position = False
-            return
+        timeframe_duration = pd.to_timedelta(CONFIG['timeframe_signal'])
+        expiration_time = signal_row.name + (timeframe_duration * expiration_candles)
 
-        # --- REVISI: Logika exit yang lebih canggih ---
-        exit_reason = "End of Data"
-        exit_price = future_candles.iloc[-1]['close']
-        exit_time = future_candles.index[-1]
+        self.pending_order = {
+            'limit_price': limit_price, 'direction': direction,
+            'sl_price': stop_loss_price, 'initial_sl': stop_loss_price,
+            'tp_price': take_profit_price, 'position_size_usd': position_size_usd,
+            'expiration_time': expiration_time
+        }
 
-        for idx, candle in future_candles.iterrows():
-            # Trailing Stop Logic
-            if exit_params.get('trailing_atr', False):
-                trail_dist = candle[f"ATRr_{CONFIG['atr_period']}"] * exit_params.get('atr_trail_mult', 1.2)
-                if direction == 'LONG':
-                    new_sl = candle['high'] - trail_dist
-                    stop_loss_price = max(stop_loss_price, new_sl)
-                else: # SHORT
-                    new_sl = candle['low'] + trail_dist
-                    stop_loss_price = min(stop_loss_price, new_sl)
+    def check_trade_and_order(self, start_time, end_time, full_data):
+        """Memeriksa exit untuk posisi aktif dan fill untuk pending order."""
+        # 1. Periksa Posisi Aktif untuk Exit
+        if self.active_position:
+            candles_to_check = full_data.loc[start_time:end_time].iloc[1:]
+            if candles_to_check.empty: return
 
-            # Check SL Hit
-            if (direction == 'LONG' and candle['low'] <= stop_loss_price) or \
-               (direction == 'SHORT' and candle['high'] >= stop_loss_price):
-                exit_price = stop_loss_price
-                exit_time = idx
-                exit_reason = "Stop Loss"
-                break
+            exit_reason = None
+            for idx, candle in candles_to_check.iterrows():
+                # Logika Trailing Stop (jika diaktifkan)
+                if LIVE_TRADING_CONFIG.get("trailing_sl_enabled", False):
+                    is_trailing_active = self.active_position.get('trailing_sl_active', False)
+                    risk_distance = abs(self.active_position['entry_price'] - self.active_position['initial_sl'])
+                    if risk_distance > 0:
+                        current_rr = abs(candle['close'] - self.active_position['entry_price']) / risk_distance
+                        if not is_trailing_active and current_rr >= LIVE_TRADING_CONFIG.get("trailing_sl_trigger_rr", 1.0):
+                            self.active_position['trailing_sl_active'] = True
+                            is_trailing_active = True
+                    
+                    if is_trailing_active:
+                        atr_val = candle[f"ATRr_{CONFIG['atr_period']}"]
+                        trail_dist = atr_val * LIVE_TRADING_CONFIG.get("trailing_sl_distance_atr", 1.5)
+                        if self.active_position['direction'] == 'LONG':
+                            self.active_position['sl_price'] = max(self.active_position['sl_price'], candle['close'] - trail_dist)
+                        else:
+                            self.active_position['sl_price'] = min(self.active_position['sl_price'], candle['close'] + trail_dist)
 
-            # Check TP Hit
-            if (direction == 'LONG' and candle['high'] >= take_profit_price) or \
-               (direction == 'SHORT' and candle['low'] <= take_profit_price):
-                exit_price = take_profit_price
-                exit_time = idx
-                exit_reason = "Take Profit"
-                break
-
-            # Volume Fade Exit Logic
-            if exit_params.get('exit_on_vol_drop', False):
-                if candle['volume'] < (candle[f"VOL_{CONFIG['volume_lookback']}"] * 0.8):
-                    exit_price = candle['close']
-                    exit_time = idx
-                    exit_reason = "Volume Fade"
+                current_sl_price = self.active_position['sl_price']
+                
+                # Logika Exit berdasarkan penutupan candle
+                if (self.active_position['direction'] == 'LONG' and candle['close'] <= current_sl_price) or \
+                   (self.active_position['direction'] == 'SHORT' and candle['close'] >= current_sl_price):
+                    exit_price, exit_time, exit_reason = candle['close'], idx, "Stop Loss (Close)"
                     break
-        
-        # --- REVISI: Kalkulasi PnL berdasarkan exit price ---
-        # Apply slippage
-        slippage = exit_params.get('slippage_sensitivity', 0.0)
-        if direction == 'LONG': # Selling to close
-            exit_price *= (1 - slippage)
-        else: # Buying to close
-            exit_price *= (1 + slippage)
+                
+                if not self.active_position.get('trailing_sl_active', False) and \
+                   ((self.active_position['direction'] == 'LONG' and candle['close'] >= self.active_position['tp_price']) or \
+                   (self.active_position['direction'] == 'SHORT' and candle['close'] <= self.active_position['tp_price'])):
+                    exit_price, exit_time, exit_reason = candle['close'], idx, "Take Profit (Close)"
+                    break
+            
+            if exit_reason:
+                self.close_trade(exit_price, exit_time, exit_reason)
 
-        if direction == 'LONG':
-            pnl = (exit_price - entry_price) / entry_price * self.initial_balance
-        else: # SHORT
-            pnl = (entry_price - exit_price) / entry_price * self.initial_balance
+        # 2. Periksa Pending Order untuk Fill atau Expiry
+        elif self.pending_order:
+            if end_time > self.pending_order['expiration_time']:
+                self.pending_order = None # Order kedaluwarsa
+                return
 
-        # Simplified PnL for now, not using full contract size logic
-        outcome = "WIN" if pnl > 0 else "LOSS"
+            candles_to_check = full_data.loc[start_time:end_time].iloc[1:]
+            for fill_time, candle in candles_to_check.iterrows():
+                if (self.pending_order['direction'] == 'LONG' and candle['low'] <= self.pending_order['limit_price']) or \
+                   (self.pending_order['direction'] == 'SHORT' and candle['high'] >= self.pending_order['limit_price']):
+                    self.open_trade(self.pending_order, fill_time)
+                    self.pending_order = None
+                    break
 
-        self.balance += pnl
+    def open_trade(self, order_details, fill_time):
+        """Membuka posisi dari pending order yang terisi."""
+        self.trade_id_counter += 1
+        entry_price = order_details['limit_price'] * (1 + SLIPPAGE['pct'] if order_details['direction'] == 'LONG' else 1 - SLIPPAGE['pct'])
+        entry_fee = order_details['position_size_usd'] * FEES['maker']
+
+        self.active_position = {
+            'id': self.trade_id_counter, 'entry_time': fill_time,
+            'entry_price': entry_price, 'entry_fee': entry_fee, **order_details
+        }
+
+    def close_trade(self, exit_price, exit_time, exit_reason):
+        """Menutup posisi aktif dan mencatat hasilnya."""
+        if not self.active_position: return
+
+        trade = self.active_position
+        direction = trade['direction']
+        entry_price = trade['entry_price']
+        position_size_usd = trade['position_size_usd']
+
+        actual_exit_price = exit_price * (1 - SLIPPAGE['pct'] if direction == 'LONG' else 1 + SLIPPAGE['pct'])
+        exit_fee_rate = FEES['maker'] if exit_reason == 'Take Profit (Close)' else FEES['taker']
+        exit_fee = position_size_usd * exit_fee_rate
+        total_fees = trade['entry_fee'] + exit_fee
+
+        pnl_pct = (actual_exit_price - entry_price) / entry_price if direction == 'LONG' else (entry_price - actual_exit_price) / entry_price
+        pnl_usd = pnl_pct * position_size_usd
+        net_pnl_usd = pnl_usd - total_fees
+
+        self.balance += net_pnl_usd
+        outcome = "WIN" if net_pnl_usd > 0 else "LOSS"
+
         self.trades.append({
-            "outcome": outcome, "pnl": pnl, "entry_time": signal_row.name, 
+            "outcome": outcome, "pnl": net_pnl_usd, "entry_time": trade['entry_time'], 
             "exit_time": exit_time, "exit_reason": exit_reason,
-            "sl_dist": stop_loss_dist, "tp_dist": take_profit_dist,
+            "sl_dist": abs(trade['entry_price'] - trade['initial_sl']), 
+            "tp_dist": abs(trade['tp_price'] - trade['entry_price']),
         })
-        self.in_position = False
+        self.active_position = None
 
     def get_results(self, version_name):
         total_trades = len(self.trades)
@@ -224,8 +289,11 @@ class Backtester:
             return summary_results, None, None
 
         # --- Calculate Backtest Duration ---
-        start_time = self.trades[0]['entry_time']
-        end_time = self.trades[-1]['exit_time']
+        trades_df = pd.DataFrame(self.trades)
+        trades_df['entry_time'] = pd.to_datetime(trades_df['entry_time'])
+        trades_df['exit_time'] = pd.to_datetime(trades_df['exit_time'])
+        start_time = trades_df['entry_time'].min()
+        end_time = trades_df['exit_time'].max()
         duration_days = (end_time - start_time).days
 
         # --- Performance Metrics Calculation ---
@@ -281,96 +349,139 @@ class Backtester:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Comparative Backtester for Trading Strategies")
-    parser.add_argument("--symbol", type=str, default="BTC/USDT", help="Trading symbol (e.g., BTC/USDT)")
+    parser = argparse.ArgumentParser(description="Portfolio-based Comparative Backtester for Trading Strategies")
+    parser.add_argument("--max_symbols", type=int, default=20, help="Number of top symbols to test against (sorted by volume)")
     parser.add_argument("--limit", type=int, default=1500, help="Number of 5m candles to backtest")
     args = parser.parse_args()
 
-    # 1. Fetch all required data once
-    # Correctly scale the limit for different timeframes to cover the same time duration
-    limit_5m = args.limit
-    # For 15m data, we need 1/3rd the number of candles to cover the same period (5m * 3 = 15m)
-    limit_15m = (limit_5m // 3) + 5 # Add a small buffer
-    # For 1h data, we need 1/12th the number of candles (5m * 12 = 1h)
-    limit_1h = (limit_5m // 12) + 5 # Add a small buffer
+    console = Console()
 
-    # --- PERBAIKAN KONSISTENSI ---
+    # --- REVISI BESAR: Ambil daftar simbol teratas ---
+    async def fetch_symbols_async():
+        """Fungsi helper async untuk mengambil daftar simbol."""
+        from config import API_KEYS
+        import ccxt.pro as ccxtpro
+        async_exchange = None
+        try:
+            async_exchange = ccxtpro.binance({
+                'apiKey': API_KEYS['live']['api_key'], 'secret': API_KEYS['live']['api_secret'],
+                'options': {'defaultType': 'future'}, 'enableRateLimit': True,
+            })
+            async_exchange.set_sandbox_mode(False)
+            return await get_all_futures_symbols(async_exchange)
+        finally:
+            if async_exchange: await async_exchange.close()
+
+    console.log("Fetching top symbols by volume...")
+    all_symbols = asyncio.run(fetch_symbols_async())
+    symbols_to_test = all_symbols[:args.max_symbols]
+    console.log(f"Will run comparison across these {len(symbols_to_test)} symbols: {', '.join(symbols_to_test)}")
+
+    # --- Inisialisasi exchange sinkron untuk fetching data historis ---
     import ccxt
-    from config import API_KEYS
     exchange = ccxt.binance({
-        'apiKey': API_KEYS['live']['api_key'],
-        'secret': API_KEYS['live']['api_secret'],
-        'options': {'defaultType': 'future'},
-        'enableRateLimit': True,
-        'test': False,
+        'options': {'defaultType': 'future'}, 'enableRateLimit': True,
     })
-    exchange.set_sandbox_mode(False)
 
-    import asyncio
-    print(f"Fetching {limit_5m} candles for 5m, {limit_15m} for 15m, and {limit_1h} for 1h...")
+    # --- REVISI BESAR: Loop melalui setiap strategi dan setiap simbol ---
+    strategy_versions = STRATEGY_CONFIG
+    all_results = [] # Akan menyimpan hasil dari setiap (strategi, simbol)
 
-    df_5m = asyncio.run(fetch_binance_data(exchange, args.symbol, '5m', limit=limit_5m, use_cache=True)) if exchange else None
-    df_15m = asyncio.run(fetch_binance_data(exchange, args.symbol, '15m', limit=limit_15m, use_cache=True)) if exchange else None
-    df_1h = asyncio.run(fetch_binance_data(exchange, args.symbol, '1h', limit=limit_1h, use_cache=True)) if exchange else None
+    for symbol in symbols_to_test:
+        console.log(f"\n[bold]===== Processing Symbol: {symbol} =====[/bold]")
+        
+        # 1. Fetch data untuk simbol saat ini
+        limit_5m = args.limit
+        buffer = 200
+        limit_15m = (limit_5m // 3) + buffer
+        limit_1h = (limit_5m // 12) + buffer
 
-    if any(df is None for df in [df_5m, df_15m, df_1h]):
-        print("Failed to fetch all required data. Exiting.")
-        exit()
+        df_5m, _ = fetch_binance_data_sync(exchange, symbol, '5m', limit=limit_5m, use_cache=True)
+        df_15m, _ = fetch_binance_data_sync(exchange, symbol, '15m', limit=limit_15m, use_cache=True)
+        df_1h, _ = fetch_binance_data_sync(exchange, symbol, '1h', limit=limit_1h, use_cache=True)
 
-    # 2. Prepare a single, rich DataFrame
-    base_data = prepare_data(df_5m, df_15m, df_1h)
+        if any(df is None or df.empty for df in [df_5m, df_15m, df_1h]):
+            console.log(f"[yellow]Skipping {symbol} due to data fetching issues.[/yellow]")
+            continue
 
-    # 3. Define strategy versions to test
-    strategy_versions = STRATEGY_MAP
+        # 2. Prepare data
+        df_5m = calculate_indicators(df_5m)
+        df_15m = calculate_indicators(df_15m)
+        df_1h = calculate_indicators(df_1h)
+        base_data = prepare_data(df_5m, df_15m, df_1h)
+        if base_data is None:
+            console.log(f"[yellow]Skipping {symbol} due to data preparation issues.[/yellow]")
+            continue
 
-    # 4. Run backtest for each version
-    all_summary_results = []
-    all_detailed_metrics = []
-    all_json_logs = []
+        # 3. Jalankan backtest untuk setiap strategi pada simbol ini
+        for name, config in strategy_versions.items():
+            console.log(f"--- Running backtest for [cyan]{name}[/cyan] on [yellow]{symbol}[/yellow] ---")
+            backtester = Backtester(
+                symbol=symbol,
+                initial_balance=CONFIG["account_balance"],
+                risk_per_trade=CONFIG["risk_per_trade"],
+                rr_ratio=CONFIG["risk_reward_ratio"]
+            )
+            func = config['function']
+            _, _, json_log = backtester.run(name, func, base_data)
+            
+            if json_log:
+                all_results.append(json_log)
 
-    backtester = Backtester(
-        symbol=args.symbol,
-        initial_balance=CONFIG["account_balance"],
-        risk_per_trade=CONFIG["risk_per_trade"],
-        rr_ratio=CONFIG["risk_reward_ratio"]
-    )
+    # --- REVISI BESAR: Agregasi dan Tampilkan Hasil Akhir ---
+    if all_results:
+        results_df = pd.DataFrame(all_results)
 
-    for name, func in strategy_versions.items():
-        print(f"\n--- Running Backtest for Version: {name} ---")
-        summary, detailed, json_log = backtester.run(name, func, base_data)
-        if summary:
-            all_summary_results.append(summary)
-        if detailed:
-            all_detailed_metrics.append(detailed)
-        if json_log:
-            all_json_logs.append(json_log)
+        # Agregasi metrik per strategi di semua simbol
+        agg_metrics = results_df.groupby('version').agg(
+            total_pnl_pct=('net_profit_pct', 'sum'),
+            avg_win_rate=('win_rate', 'mean'),
+            avg_pf=('profit_factor', lambda x: x[np.isfinite(x)].mean()), # Rata-rata profit factor yang valid
+            avg_dd=('max_drawdown', 'mean'),
+            total_trades=('total_trades', 'sum'),
+            num_symbols_tested=('symbol', 'nunique')
+        ).reset_index()
 
-    # 5. Display final comparison tables
-    if all_summary_results:
-        summary_df = pd.DataFrame(all_summary_results)
-        header = " BACKTEST RESULTS (SUMMARY) "
-        print("\n\n" + "="*80)
-        print(f"{header:=^80}")
-        print("="*80)
-        print(summary_df.to_string(index=False))
-        print("="*80)
+        agg_metrics = agg_metrics.sort_values(by='total_pnl_pct', ascending=False)
 
-    if all_detailed_metrics:
-        detailed_df = pd.DataFrame(all_detailed_metrics)
-        header = " PERFORMANCE METRICS (DETAILED) "
-        print("\n" + "="*80)
-        print(f"{header:=^80}")
-        print("="*80)
-        print(detailed_df.to_string(index=False))
-        print("="*80)
+        # --- PERBAIKAN: Gunakan Rich Table untuk output yang lebih rapi ---
+        summary_table = Table(
+            title="Portfolio Backtest Strategy Comparison (Aggregated Results)",
+            show_header=True,
+            header_style="bold magenta",
+            expand=True
+        )
 
-    # 6. Save all metrics to a single JSON file
-    if all_json_logs:
+        # Tambahkan kolom ke tabel
+        summary_table.add_column("Strategy", style="cyan", no_wrap=True, min_width=25)
+        summary_table.add_column("Symbols Tested", justify="right")
+        summary_table.add_column("Total Trades", justify="right")
+        summary_table.add_column("Avg Win Rate", justify="right")
+        summary_table.add_column("Avg Profit Factor", justify="right")
+        summary_table.add_column("Avg Max Drawdown", justify="right")
+        summary_table.add_column("Total PnL %", justify="right")
+
+        # Tambahkan baris dari DataFrame yang sudah diagregasi
+        for _, row in agg_metrics.iterrows():
+            pnl_style = "green" if row['total_pnl_pct'] > 0 else "red"
+            summary_table.add_row(
+                row['version'],
+                f"{row['num_symbols_tested']:.0f}",
+                f"{row['total_trades']:.0f}",
+                f"{row['avg_win_rate']:.2f}%",
+                f"{row['avg_pf']:.2f}",
+                f"[red]{row['avg_dd']:.2f}%[/red]",
+                f"[{pnl_style}]{row['total_pnl_pct']:+.2f}%[/{pnl_style}]"
+            )
+        
+        console.print(summary_table)
+
+        # Simpan hasil agregasi
         output_dir = Path('output')
         output_dir.mkdir(exist_ok=True)
-        filename = output_dir / f"metrics_{args.symbol.replace('/', '')}.json"
+        filename = output_dir / f"strategy_comparison_results.json"
         with open(filename, 'w') as f:
-            json.dump(all_json_logs, f, indent=2)
-        print(f"\nSaved all detailed metrics to {filename}")
+            results_df.to_json(f, orient='records', indent=2)
+        console.log(f"\nSaved detailed results for all symbols to {filename}")
 
-    print(f"\n✅ Backtest strategy comparison complete. Run 'python backtest_analyzer/evaluate_strategy_comparation.py {filename}' for advanced risk analysis.")
+    console.log(f"\n✅ Backtest strategy comparison complete.")

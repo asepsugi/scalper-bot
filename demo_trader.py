@@ -176,6 +176,11 @@ class DemoTrader:
                     console.log(f"[yellow]Data resample untuk {symbol} (Demo) tidak cukup, analisis dilewati.[/yellow]")
                     continue
 
+                # --- PERBAIKAN: Selaraskan dengan live_trader, hitung indikator SEBELUM prepare_data ---
+                df_5m = calculate_indicators(df_5m)
+                df_15m = calculate_indicators(df_15m)
+                df_1h = calculate_indicators(df_1h)
+
                 base_data = prepare_data(df_5m, df_15m, df_1h)
                 if base_data is None or base_data.empty:
                     console.log(f"[yellow]Gagal mempersiapkan data untuk {symbol} (Demo), analisis dilewati.[/yellow]")

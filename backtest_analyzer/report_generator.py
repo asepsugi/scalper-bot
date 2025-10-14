@@ -148,15 +148,34 @@ def generate_terminal_ranking(df: pd.DataFrame, rank_by: str = 'sharpe_ratio') -
     table.add_column("Slippage Impact @0.1%", justify="right")
  
     for i, row in enumerate(df_sorted.head(3).itertuples(), 1):
+        # --- PERBAIKAN: Logika pewarnaan dinamis berdasarkan legenda ---
+        sharpe_val = row.sharpe_ratio
+        sharpe_style = "green" if sharpe_val > 1.0 else ("red" if sharpe_val < 0.5 else "yellow")
+
+        si_val = row.SI
+        si_style = "green" if si_val > 0.7 else ("red" if si_val < 0.5 else "yellow")
+
+        es_val = row.ES
+        es_style = "green" if es_val > 0.8 else ("red" if es_val < 0.4 else "yellow")
+
+        dd_val = row.max_drawdown
+        dd_style = "green" if dd_val < 10 else ("red" if dd_val > 25 else "yellow")
+
+        profit_val = row.net_profit_pct
+        profit_style = "green" if profit_val > 0 else "red"
+
+        slippage_val = row.slippage_impact
+        slippage_style = "green" if slippage_val < 15 else ("red" if slippage_val > 30 else "yellow")
+
         table.add_row(
             f"{i}.",
             row.version,
-            f"{row.sharpe_ratio:.2f}",
-            f"{row.SI:.2f}",
-            f"{row.ES:.2f}",
-            f"{row.max_drawdown:.2f}%",
-            f"[green]{row.net_profit_pct:+.2f}%[/green]",
-            f"[red]{row.slippage_impact:.2f}%[/red]",
+            f"[{sharpe_style}]{sharpe_val:.2f}[/{sharpe_style}]",
+            f"[{si_style}]{si_val:.2f}[/{si_style}]",
+            f"[{es_style}]{es_val:.2f}[/{es_style}]",
+            f"[{dd_style}]{dd_val:.2f}%[/{dd_style}]",
+            f"[{profit_style}]{profit_val:+.2f}%[/{profit_style}]",
+            f"[{slippage_style}]{slippage_val:.2f}%[/{slippage_style}]",
         )
  
     console.print(table)
@@ -170,6 +189,9 @@ def print_legend(console: Console):
     legend_table.add_column("Good", style="green")
     legend_table.add_column("Bad", style="red")
 
+    legend_table.add_row(
+        "Sharpe", "Risk-adjusted return. Higher is better.", "> 1.0", "< 0.5"
+    )
     legend_table.add_row(
         "Sustain. (SI)", "Sustainability Index. Overall long-term viability.", "> 0.70", "< 0.50"
     )
