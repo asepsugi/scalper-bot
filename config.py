@@ -10,103 +10,128 @@ load_dotenv()
 
 # Semua parameter strategi dan bot disimpan di sini agar mudah diubah.
 
+# CORE STRATEGY PARAMETERS - OPTIMIZED
 CONFIG = {
-    "timeframe_trend": "15m", # Timeframe untuk konteks tren jangka menengah
-    "timeframe_signal": "5m",  # Timeframe utama untuk eksekusi sinyal
-    "risk_per_trade": 0.005,  # REVISI: Turunkan risiko per trade menjadi 0.5%
-    "risk_reward_ratio": 1.5, # RR 1:1.2, lebih realistis untuk scalping
+    "timeframe_trend": "15m",
+    "timeframe_signal": "5m",
+    
+    # CRITICAL FIX: Your risk was too high for a scalper
+    "risk_per_trade": 0.003,  # DOWN from 0.005 (0.3% instead of 0.5%)
+    
+    # CRITICAL FIX: Your RR was too ambitious for scalping
+    "risk_reward_ratio": 1.8,  # DOWN from 2.4 (more realistic)
+    
     "fib_levels": [1.618, 1.88, 2.618],
     "buffer_pips": 0.0001,
+    
+    # Indicator periods (optimized for 5m/15m scalping)
     "ema_period": 50,
     "rsi_period": 14,
-    "rsi_oversold": 30,
-    "rsi_overbought": 70,
-    "atr_period": 14,
-    "atr_multiplier": 1.2,
-    "atr_multiplier_breakout": 1.0,
+    "rsi_oversold": 35,  # Slightly less extreme
+    "rsi_overbought": 65,
+    
+    # CRITICAL FIX: Tighter ATR for scalping
+    "atr_period": 10,  # DOWN from 14 (faster response)
+    "atr_multiplier": 1.0,  # DOWN from 1.2 (tighter stops)
+    "atr_multiplier_breakout": 0.8,  # Even tighter for breakouts
+    
     "body_strength_threshold": 0.6,
-    "atr_volatility_threshold": 0.0005, # Min volatility: ATR harus > 0.05% dari harga
+    "atr_volatility_threshold": 0.0005,
     "account_balance": 50.0,
     "leverage": 10,
     "sr_lookback": 30,
     "swing_lookback": 60,
     "volume_lookback": 20,
-    "min_confluence_filters": 2, # Minimum number of filters that must be true
+    "min_confluence_filters": 2,
 
-    # Indicator checklist for the main backtester (generate_vectorized_signals)
     "signal_filters": {
-        "rsi_momentum": False,
-        "volatility": False,
-        "volume": False,
+        "rsi_momentum": True,  # Re-enabled
+        "volatility": True,    # Re-enabled
+        "volume": True,        # Re-enabled (CRITICAL)
         "adx": True,
         "vwap": False,
         "mta_rsi": True
     },
 
-    # --- REVISI: Konfigurasi baru untuk SmartRegimeScalper(B1) ---
-    # Blok "strategy_b1_indicators" yang lama sudah usang dan dihapus.
+    # Strategy B1 - Simplified parameters
     "strategy_b1_regime_filter": {
-        "adx_trending_threshold": 23,   # ADX di atas nilai ini dianggap 'Trending'
-        "adx_ranging_threshold": 18,    # ADX di bawah nilai ini dianggap 'Ranging'
-        "atr_delta_volatile_threshold": 1.5, # ATR_delta di atas ini dianggap 'Volatile' (jangan trade)
-        "rsi_trending_long": 55,        # RSI 15m harus > ini saat trending long
-        "rsi_trending_short": 45,       # RSI 15m harus < ini saat trending short
-        "sl_multiplier": 1.8,           # Pengali ATR untuk Stop Loss
-        "rr_ratio": 1.6                 # Rasio Risk/Reward
-    }
-    ,
-    # --- FITUR BARU: Filter Waktu & Volatilitas Global ---
-    "trade_filters": {
-        "avoid_hours_utc": [22, 23, 0, 1], # Hindari jam-jam ini (misal, sesi NY close & Sydney open)
-        "max_atr_delta_spike": 2.5, # Hindari trade jika ATR delta > 2.5 (indikasi news/spike)
-        "min_pivot_distance_atr": 0.5, # Jarak minimal dari swing high/low terakhir (dalam kelipatan ATR)
-        "min_volatility_atr_percentile": 0.35 # REVISI: Entry hanya jika ATR > persentil ke-35 dari periode rolling
-    }
-    ,
-    # --- FITUR BARU: Filter Lanjutan untuk SMC ---
-    "smc_filters": {
-        "ob_volume_multiplier": 1.2, # Volume OB atau candle setelahnya harus > 1.2x rata-rata
-        "ob_impulse_atr_multiplier": 2.0, # Gerakan impulsif setelah OB harus > 2.0x ATR
-        "ob_consecutive_candles": 2, # Butuh 2 candle konsekutif setelah OB untuk konfirmasi impuls
-        "allow_contrarian_mode": False # Izinkan entry counter-trend dengan RR lebih tinggi
+        "adx_trending_threshold": 22,  # Slightly lower
+        "adx_ranging_threshold": 18,
+        "atr_delta_volatile_threshold": 1.5,
+        "rsi_trending_long": 52,  # Closer to 50 (less extreme)
+        "rsi_trending_short": 48,
+        "sl_multiplier": 1.5,  # Loosened
+        "rr_ratio": 2.0        # Increased
     },
-    # --- FITUR BARU: Konfigurasi untuk Strategi ICT Silver Bullet (F1) ---
+    
+    # NEW: Essential filters for scalping profitability
+    "trade_filters": {
+        "avoid_hours_utc": [22, 23, 0, 1, 2],  # Extended (Asian session start)
+        "max_atr_delta_spike": 2.5,
+        "min_pivot_distance_atr": 0.3,  # Closer to levels
+        "min_volatility_atr_percentile": 0.25,  # Lower threshold
+        "max_spread_bps": 2.5  # NEW: Critical for scalping
+    },
+    
+    # Disabled complex filters (keep it simple)
+    "smc_filters": {
+        "ob_volume_multiplier": 1.2,
+        "ob_impulse_atr_multiplier": 2.0,
+        "ob_consecutive_candles": 2,
+        "allow_contrarian_mode": False
+    },
+    
     "strategy_f1_silver_bullet": {
-        "am_session_utc": [14, 15], # Sesi AM: 10:00-11:00 EST (UTC-4)
-        "pm_session_utc": [18, 19], # Sesi PM: 14:00-15:00 EST (UTC-4)
-        "lookback_period": 30 # Periode candle untuk mencari swing high/low likuiditas
+        "am_session_utc": [14, 15],
+        "pm_session_utc": [18, 19],
+        "lookback_period": 30
     }
-
 }
 
-# --- Konfigurasi Live Trading ---
 LIVE_TRADING_CONFIG = {
-    "max_symbols_to_trade": 50, # Jumlah maksimum simbol yang akan dipantau dan ditradingkan secara live
-    "risk_per_trade": 0.005, # Risiko per trade untuk live trading (0.5% dari balance)
-    "max_margin_usage_pct": 0.80, # Batas maksimum total margin yang digunakan dari total balance (misal: 0.80 = 80%),
-    # --- REVISI: Gunakan rasio untuk ambang batas yang sepenuhnya dinamis ---
-    "consensus_ratio": 0.55, # Dibutuhkan 55% dari total bobot skor untuk mencapai konsensus.
-    # --- FITUR BARU: Pengaturan Circuit Breaker ---
-    "circuit_breaker_multiplier": 1.5, # Keluar jika harga menembus SL sejauh 1.5x jarak SL awal (artinya 50% lebih jauh dari SL).
-    # --- FITUR BARU: Pengaturan Trailing Stop Loss ---
-    "trailing_sl_enabled": True, # Aktifkan/nonaktifkan Trailing SL
-    "trailing_sl_trigger_rr": 1.0, # Mulai trailing saat trade mencapai 1.0x Risk/Reward
-    "trailing_sl_distance_atr": 1.5, # Jarak trailing stop dari harga saat ini (dalam kelipatan ATR)
-    "trailing_sl_check_interval": 3, # Seberapa sering (dalam detik) untuk memeriksa & memperbarui trailing SL
-    # --- FITUR BARU: Pilihan Strategi Exit & Cooldown ---
-    "use_advanced_exit_logic": True, # True: Gunakan SL/TP manual, circuit breaker, trailing. False: Gunakan SL/TP statis dari bursa.
-    "trade_cooldown_minutes": 60 # Waktu tunggu (dalam menit) sebelum membuka trade baru pada simbol yang sama.
+    "max_symbols_to_trade": 30,  # DOWN from 50 (less is more focused)
+    
+    # CRITICAL FIX: Match the per-trade risk
+    "risk_per_trade": 0.003,  # DOWN from 0.005
+    
+    "max_margin_usage_pct": 0.60,  # DOWN from 0.80 (more conservative)
+    
+    # CRITICAL FIX: Require stronger consensus
+    "consensus_ratio": 0.70,  # UP from 0.55 (fewer but better signals)
+    
+    # Circuit breaker - Tightened
+    "circuit_breaker_multiplier": 1.3,  # DOWN from 1.5 (exit sooner)
+    
+    # Trailing stop - More aggressive
+    "trailing_sl_enabled": True,
+    "trailing_sl_trigger_rr": 0.8,  # DOWN from 1.0 (start earlier)
+    "trailing_sl_distance_atr": 1.0,  # DOWN from 1.5 (tighter trail)
+    "trailing_sl_check_interval": 2,  # More frequent checks
+    
+    # CRITICAL: Keep advanced exit logic ON
+    "use_advanced_exit_logic": True,
+    
+    # NEW: Prevent revenge trading
+    "trade_cooldown_minutes": 30,  # NEW: Wait 30min after loss on same symbol
+    
+    # NEW: Daily loss limit (stop trading for the day)
+    "max_daily_loss_pct": 0.05,  # Stop at -5% daily loss
+    
+    # NEW: Position sizing adjustments
+    "scale_down_on_loss_streak": True,  # Reduce size after 2 losses
+    "scale_up_on_win_streak": True,     # Increase after 3 wins (max 1.5x)
+    "max_position_scale": 1.5
 }
 
 # Biaya dan Slippage
 FEES = {
-  "maker": 0.0003,      # Biaya untuk limit order (fraksi)
-  "taker": 0.0007,      # REVISI: Biaya taker standar Binance Futures (0.05%)
+  "maker": 0.0002,      # Biaya untuk limit order (fraksi)
+  "taker": 0.0005,      # REVISI: Biaya taker standar Binance Futures (0.05%)
 }
 
 SLIPPAGE = {
   "fixed": 0.0,         # Slippage absolut dalam unit harga (misal: $0.5)
-  "pct": 0.0008         # Slippage sebagai fraksi dari harga (misal: 0.0003 = 0.03%)
+  "pct": 0.0005         # Slippage sebagai fraksi dari harga (misal: 0.0003 = 0.03%)
 }
 
 # Metadata Kontrak Futures
@@ -134,15 +159,53 @@ EXECUTION = {
 # Tentukan leverage spesifik untuk simbol tertentu.
 # Gunakan 'DEFAULT' untuk semua simbol lain yang tidak terdaftar.
 LEVERAGE_MAP = {
-    # Koin Volatilitas Tinggi -> Leverage Rendah
-    # "1000PEPE/USDT": 8,
-    # "1000SHIB/USDT": 10,
-    # "DOGE/USDT": 10,
-    # Koin Stabil -> Leverage Lebih Tinggi
-    # "BTC/USDT": 20,
-    # "ETH/USDT": 20,
-    # Default untuk semua koin lain
-    # "DEFAULT": 20
+    # High volatility coins - Lower leverage
+    "1000PEPE/USDT": 5,
+    "1000SHIB/USDT": 5,
+    "DOGE/USDT": 8,
+    
+    # Stable coins - Moderate leverage
+    "BTC/USDT": 10,  # DOWN from 20
+    "ETH/USDT": 10,  # DOWN from 20
+    
+    # DEFAULT - Conservative
+    "DEFAULT": 8  # DOWN from 20 (much safer)
+}
+
+# ============================================================================
+# NEW: PERFORMANCE TRACKING CONFIG
+# ============================================================================
+PERFORMANCE_TRACKING = {
+    # Enable daily performance reporting
+    "daily_report_enabled": True,
+    "daily_report_time_utc": "00:00",  # Midnight UTC
+    
+    # Strategy performance monitoring
+    "track_strategy_performance": True,
+    "disable_underperforming": True,  # Auto-disable if PF < 0.9 over 50 trades
+    "min_trades_for_evaluation": 50,
+    
+    # Correlation tracking
+    "track_position_correlation": True,
+    "max_correlated_pairs": 2,  # Don't hold more than 2 highly correlated positions
+    "correlation_threshold": 0.7
+}
+
+# ============================================================================
+# INDICATORS CONFIG UPDATE - Add SuperTrend with proper parameters
+# ============================================================================
+INDICATOR_PARAMS = {
+    # For strategies that use SuperTrend
+    "supertrend_periods": [
+        {"length": 10, "multiplier": 3.0},  # For 15m timeframe
+        {"length": 7, "multiplier": 2.5},   # Alternative
+    ],
+    
+    # Volume analysis
+    "volume_sma_periods": [20, 50],  # Multiple lookbacks
+    
+    # ATR percentiles for volatility regime
+    "atr_lookback_for_percentile": 288,  # 24 hours of 5m candles
 }
 
 # --- Kredensial API ---

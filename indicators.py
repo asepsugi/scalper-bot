@@ -235,12 +235,13 @@ def calculate_indicators(df):
     df.ta.stoch(append=True) # Menggunakan default pandas-ta (14, 3, 3)
     df.ta.macd(append=True) # Menggunakan default pandas-ta (12, 26, 9)
     df.ta.atr(length=CONFIG["atr_period"], append=True)
-    df.ta.adx(append=True) # Default length 14
+    # REVISI: Gunakan periode dari config untuk ADX agar konsisten dengan strategi
+    df.ta.adx(length=CONFIG["atr_period"], append=True)
     df.ta.vwap(append=True)
 
     # --- FITUR BARU: Indikator untuk Strategi G1 (UT Bot / SuperTrend) ---
     # Menggunakan parameter dari video: ATR Period=1, Multiplier=1.0
-    df.ta.supertrend(length=1, multiplier=1.0, append=True)
+    df.ta.supertrend(length=10, multiplier=3.0, append=True)
 
     # --- PERBAIKAN FINAL: Kembalikan perhitungan Volume SMA ke sini ---
     # Ini memastikan VOL_20 dihitung pada semua timeframe sejak awal.

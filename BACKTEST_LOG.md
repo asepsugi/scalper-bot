@@ -1,6 +1,105 @@
 
 ---
 
+## Backtest: 2025-11-12 18:43:06
+
+**Parameter:**
+-   **Simbol:** Top 40 (berdasarkan volume)
+-   **Candles:** 10000
+-   **Periode:** ~1 Bulan 1 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AdaptiveTrendRide(A3)` | 1.0 | $0.39 | 7 | 57.14% |
+| `SmartRegimeScalper(B1)` | 1.0 | $0.00 | 0 | N/A |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $50.39                     |
+| **Net Profit**    | **[green]$0.39 (+0.78%)[/green]**       |
+| Total Trades      | 7                         |
+| Win Rate          | 57.14%                     |
+| Profit Factor     | 1.24                       |
+| Max Drawdown      | 2.44%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-11-12 18:05:02
+
+**Parameter:**
+-   **Simbol:** Top 40 (berdasarkan volume)
+-   **Candles:** 10000
+-   **Periode:** ~23 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AdaptiveTrendRide(A3)` | 1.0 | $-4.36 | 10 | 30.00% |
+| `SmartRegimeScalper(B1)` | 1.0 | $0.00 | 0 | N/A |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $45.64                     |
+| **Net Profit**    | **[red]$-4.36 (-8.73%)[/red]**       |
+| Total Trades      | 10                         |
+| Win Rate          | 30.00%                     |
+| Profit Factor     | 0.23                       |
+| Max Drawdown      | 9.10%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-11-12 18:01:34
+
+**Parameter:**
+-   **Simbol:** Top 40 (berdasarkan volume)
+-   **Candles:** 2000
+-   **Periode:** ~4 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AdaptiveTrendRide(A3)` | 1.0 | $-0.24 | 2 | 50.00% |
+| `SmartRegimeScalper(B1)` | 1.0 | $0.00 | 0 | N/A |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $49.76                     |
+| **Net Profit**    | **[red]$-0.24 (-0.48%)[/red]**       |
+| Total Trades      | 2                         |
+| Win Rate          | 50.00%                     |
+| Profit Factor     | 0.52                       |
+| Max Drawdown      | 0.00%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
 ## Backtest: 2025-11-12 17:48:52
 
 **Parameter:**
