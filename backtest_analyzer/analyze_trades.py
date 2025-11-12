@@ -73,6 +73,27 @@ def analyze_trades(file_path: Path):
             )
         console.print(day_table)
 
+    # --- Analisis BARU: Selami Lebih Dalam Hari-Hari Terbaik ---
+    console.print("\n[bold]Detail Trade pada Hari-Hari Terbaik:[/bold]")
+    for date, total_pnl in best_days.items():
+        day_trades = df[df['Exit Date'] == date].sort_values(by='PnL (USD)', ascending=False)
+        
+        day_table = Table(title=f"Analisis untuk Tanggal: {date} (Total PnL: ${total_pnl:,.2f})", show_header=True, header_style="bold green")
+        day_table.add_column("Simbol")
+        day_table.add_column("Arah")
+        day_table.add_column("PnL (USD)", justify="right")
+        day_table.add_column("Alasan Keluar", style="green")
+
+        for _, trade in day_trades.iterrows():
+            pnl_color = "green" if trade['PnL (USD)'] > 0 else "red"
+            day_table.add_row(
+                trade['Symbol'],
+                trade['Direction'],
+                f"[{pnl_color}]${trade['PnL (USD)']:.2f}[/{pnl_color}]",
+                trade['Exit Reason']
+            )
+        console.print(day_table)
+
     # --- Analisis 3: Konfirmasi Hipotesis ---
     circuit_breaker_trades = df[df['Exit Reason'] == 'Circuit Breaker']
     if not circuit_breaker_trades.empty:

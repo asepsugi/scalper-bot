@@ -13,36 +13,36 @@ def get_dynamic_risk_params(total_balance: float) -> dict:
     """
     if total_balance < 25:  # Tier $10
         return {
-            "risk_per_trade": 0.005,   # 0.5%
+            "risk_per_trade": 0.01,   # 1% (risiko lebih tinggi untuk akun sangat kecil)
             "max_active_positions": 1,
             "default_leverage": 15
         }
 
     elif total_balance < 50:  # Tier $25
         return {
-            "risk_per_trade": 0.0075,  # 0.75%
+            "risk_per_trade": 0.01,  # 1%
             "max_active_positions": 2,
             "default_leverage": 25
         }
 
     elif total_balance < 250:  # Tier $50–$249
         return {
-            "risk_per_trade": 0.005,   # 0.5%
-            "max_active_positions": 3,
+            "risk_per_trade": 0.005,   # 0.5% (Sesuai permintaan)
+            "max_active_positions": 2, # REVISI: Batasi maksimal 2 posisi
             "default_leverage": 20
         }
 
     elif total_balance < 1000:  # Tier $250–$999 (growth → preservation)
         return {
             "risk_per_trade": 0.004,   # 0.4%
-            "max_active_positions": 5,
+            "max_active_positions": 2, # REVISI: Batasi maksimal 2 posisi
             "default_leverage": 15
         }
 
     else:  # Tier $1000+ (capital preservation phase)
         return {
             "risk_per_trade": 0.003,   # 0.3%
-            "max_active_positions": 4,
+            "max_active_positions": 2, # REVISI: Batasi maksimal 2 posisi
             "default_leverage": 10
         }
 

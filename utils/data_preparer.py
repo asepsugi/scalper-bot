@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import sys
+from .smc_utils import analyze_smc_on_trend_tf # Impor fungsi analisis SMC
 
 def prepare_data(df_signal, df_trend_15m, df_trend_1h):
     """
@@ -70,7 +71,43 @@ def prepare_data(df_signal, df_trend_15m, df_trend_1h):
         base_df["ATR_delta"] = (base_df[atr_col] / base_df[atr_col].rolling(5).mean().replace(0, 1e-9)).fillna(0)
     else:
         base_df["ATR_delta"] = 0.0
+
+    # --- REVISI (C.1): Hitung persentil ATR untuk filter volatilitas ---
+    # Menggunakan window panjang (misal, 7 hari di TF 15m = 7*24*4 = 672) untuk mendapatkan baseline volatilitas yang stabil.
+    atr_percentile_window = 672
+    base_df['atr_percentile'] = base_df[atr_col].rolling(window=atr_percentile_window, min_periods=100).quantile(CONFIG['trade_filters']['min_volatility_atr_percentile'])
     
+    # --- LANGKAH 5 (BARU): Jalankan Analisis SMC pada TF Trend dan gabungkan ---
+    # Kita gunakan df_trend_15m sebagai basis analisis SMC
+    smc_zones = analyze_smc_on_trend_tf(df_trend_15m)
+    
+    # Inisialisasi kolom SMC dengan nilai default
+    base_df['smc_ob_top'] = np.nan
+    base_df['smc_ob_bottom'] = np.nan
+    base_df['smc_ob_type'] = None
+    base_df['smc_fvg_top'] = np.nan
+    base_df['smc_fvg_bottom'] = np.nan
+    base_df['smc_is_premium'] = False
+    base_df['smc_recent_swing_high'] = np.nan
+    base_df['smc_recent_swing_low'] = np.nan
+    base_df['smc_trend'] = smc_zones.get("last_structure", {}).get('type')
+
+    if smc_zones.get("order_block") and smc_zones.get("equilibrium"):
+        ob = smc_zones["order_block"]
+        base_df['smc_ob_top'] = ob['top']
+        base_df['smc_ob_bottom'] = ob['bottom']
+        base_df['smc_ob_type'] = ob['type']
+    
+    if smc_zones.get("fvg"):
+        fvg = smc_zones["fvg"]
+        base_df['smc_fvg_top'] = fvg['top']
+        base_df['smc_fvg_bottom'] = fvg['bottom']
+
+    if smc_zones.get("equilibrium"):
+        base_df['smc_recent_swing_high'] = smc_zones.get('recent_swing_high')
+        base_df['smc_recent_swing_low'] = smc_zones.get('recent_swing_low')
+        base_df['smc_is_premium'] = base_df['close'] > smc_zones["equilibrium"]
+
     # --- PERBAIKAN FINAL: Isi nilai NaN setelah semua kolom digabungkan ---
     base_df.bfill(inplace=True)
     base_df.ffill(inplace=True)

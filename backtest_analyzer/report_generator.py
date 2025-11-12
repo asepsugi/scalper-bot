@@ -108,12 +108,20 @@ def calculate_final_score(df: pd.DataFrame, weights_list: List[float], final_wei
     df['ES'] = (1 / df['max_drawdown'].replace(0, 1e-6)) * (df['profit_factor'] / 2)
     
     overall_avg_duration = df['avg_trade_duration'].mean()
-    df['TDV'] = abs(df['avg_trade_duration'] - overall_avg_duration) / overall_avg_duration
+    # PERBAIKAN: Hindari pembagian dengan nol jika hanya ada satu data atau durasi nol
+    if overall_avg_duration > 0:
+        df['TDV'] = abs(df['avg_trade_duration'] - overall_avg_duration) / overall_avg_duration
+    else:
+        df['TDV'] = 0
     df['CI'] = (df['profit_factor'] * (df['win_rate'] / 100)) / (1 + (df['TDV'] / 10))
 
-    es_norm = df['ES'] / df['ES'].max() if df['ES'].max() > 0 else 0
-    ci_norm = df['CI'] / df['CI'].max() if df['CI'].max() > 0 else 0
-    sharpe_norm = df['sharpe_ratio'] / df['sharpe_ratio'].max() if df['sharpe_ratio'].max() > 0 else 0
+    # PERBAIKAN: Tangani kasus jika hanya ada satu strategi (df.max() akan error pada scalar)
+    if len(df) > 1:
+        es_norm = df['ES'] / df['ES'].max() if df['ES'].max() > 0 else 0
+        ci_norm = df['CI'] / df['CI'].max() if df['CI'].max() > 0 else 0
+        sharpe_norm = df['sharpe_ratio'] / df['sharpe_ratio'].max() if df['sharpe_ratio'].max() > 0 else 0
+    else: # Jika hanya satu strategi, skor normalisasi adalah 1 (karena itu yang terbaik dan terburuk)
+        es_norm, ci_norm, sharpe_norm = 1.0, 1.0, 1.0
     df['SI'] = (es_norm + ci_norm + sharpe_norm) / 3
 
     # 3. Hitung Final Score

@@ -238,6 +238,10 @@ def calculate_indicators(df):
     df.ta.adx(append=True) # Default length 14
     df.ta.vwap(append=True)
 
+    # --- FITUR BARU: Indikator untuk Strategi G1 (UT Bot / SuperTrend) ---
+    # Menggunakan parameter dari video: ATR Period=1, Multiplier=1.0
+    df.ta.supertrend(length=1, multiplier=1.0, append=True)
+
     # --- PERBAIKAN FINAL: Kembalikan perhitungan Volume SMA ke sini ---
     # Ini memastikan VOL_20 dihitung pada semua timeframe sejak awal.
     df.ta.sma(close=df['volume'], length=CONFIG["volume_lookback"], prefix="VOL", append=True)

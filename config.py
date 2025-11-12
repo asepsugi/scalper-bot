@@ -11,9 +11,9 @@ load_dotenv()
 # Semua parameter strategi dan bot disimpan di sini agar mudah diubah.
 
 CONFIG = {
-    "timeframe_trend": "15m",
-    "timeframe_signal": "5m",
-    "risk_per_trade": 0.01,  # 1% dari balance
+    "timeframe_trend": "15m", # Timeframe untuk konteks tren jangka menengah
+    "timeframe_signal": "5m",  # Timeframe utama untuk eksekusi sinyal
+    "risk_per_trade": 0.005,  # REVISI: Turunkan risiko per trade menjadi 0.5%
     "risk_reward_ratio": 1.5, # RR 1:1.2, lebih realistis untuk scalping
     "fib_levels": [1.618, 1.88, 2.618],
     "buffer_pips": 0.0001,
@@ -43,16 +43,40 @@ CONFIG = {
         "mta_rsi": True
     },
 
-    # Indicator checklist for strategy B1
-    "strategy_b1_indicators": {
-        "ema_trend": True,      # EMA 50/200 cross
-        "rsi_confirm": True,    # RSI 15m/1h confirmation
-        "adx_filter": True,     # ADX > 15
-        "atr_exit": True,       # ATR for SL/TP
-        "ema9_trigger": True,   # EMA 9 for entry trigger
-        "volume_filter": False, # Volume > SMA(20)
-        "atr_percentile_filter": True # Hanya trade jika ATR > 40th percentile (7-day lookback)
+    # --- REVISI: Konfigurasi baru untuk SmartRegimeScalper(B1) ---
+    # Blok "strategy_b1_indicators" yang lama sudah usang dan dihapus.
+    "strategy_b1_regime_filter": {
+        "adx_trending_threshold": 23,   # ADX di atas nilai ini dianggap 'Trending'
+        "adx_ranging_threshold": 18,    # ADX di bawah nilai ini dianggap 'Ranging'
+        "atr_delta_volatile_threshold": 1.5, # ATR_delta di atas ini dianggap 'Volatile' (jangan trade)
+        "rsi_trending_long": 55,        # RSI 15m harus > ini saat trending long
+        "rsi_trending_short": 45,       # RSI 15m harus < ini saat trending short
+        "sl_multiplier": 1.8,           # Pengali ATR untuk Stop Loss
+        "rr_ratio": 1.6                 # Rasio Risk/Reward
     }
+    ,
+    # --- FITUR BARU: Filter Waktu & Volatilitas Global ---
+    "trade_filters": {
+        "avoid_hours_utc": [22, 23, 0, 1], # Hindari jam-jam ini (misal, sesi NY close & Sydney open)
+        "max_atr_delta_spike": 2.5, # Hindari trade jika ATR delta > 2.5 (indikasi news/spike)
+        "min_pivot_distance_atr": 0.5, # Jarak minimal dari swing high/low terakhir (dalam kelipatan ATR)
+        "min_volatility_atr_percentile": 0.35 # REVISI: Entry hanya jika ATR > persentil ke-35 dari periode rolling
+    }
+    ,
+    # --- FITUR BARU: Filter Lanjutan untuk SMC ---
+    "smc_filters": {
+        "ob_volume_multiplier": 1.2, # Volume OB atau candle setelahnya harus > 1.2x rata-rata
+        "ob_impulse_atr_multiplier": 2.0, # Gerakan impulsif setelah OB harus > 2.0x ATR
+        "ob_consecutive_candles": 2, # Butuh 2 candle konsekutif setelah OB untuk konfirmasi impuls
+        "allow_contrarian_mode": False # Izinkan entry counter-trend dengan RR lebih tinggi
+    },
+    # --- FITUR BARU: Konfigurasi untuk Strategi ICT Silver Bullet (F1) ---
+    "strategy_f1_silver_bullet": {
+        "am_session_utc": [14, 15], # Sesi AM: 10:00-11:00 EST (UTC-4)
+        "pm_session_utc": [18, 19], # Sesi PM: 14:00-15:00 EST (UTC-4)
+        "lookback_period": 30 # Periode candle untuk mencari swing high/low likuiditas
+    }
+
 }
 
 # --- Konfigurasi Live Trading ---
@@ -69,8 +93,9 @@ LIVE_TRADING_CONFIG = {
     "trailing_sl_trigger_rr": 1.0, # Mulai trailing saat trade mencapai 1.0x Risk/Reward
     "trailing_sl_distance_atr": 1.5, # Jarak trailing stop dari harga saat ini (dalam kelipatan ATR)
     "trailing_sl_check_interval": 3, # Seberapa sering (dalam detik) untuk memeriksa & memperbarui trailing SL
-    # --- FITUR BARU: Pilihan Strategi Exit ---
-    "use_advanced_exit_logic": False # True: Gunakan SL/TP manual, circuit breaker, trailing. False: Gunakan SL/TP statis dari bursa.
+    # --- FITUR BARU: Pilihan Strategi Exit & Cooldown ---
+    "use_advanced_exit_logic": True, # True: Gunakan SL/TP manual, circuit breaker, trailing. False: Gunakan SL/TP statis dari bursa.
+    "trade_cooldown_minutes": 60 # Waktu tunggu (dalam menit) sebelum membuka trade baru pada simbol yang sama.
 }
 
 # Biaya dan Slippage
@@ -117,7 +142,7 @@ LEVERAGE_MAP = {
     # "BTC/USDT": 20,
     # "ETH/USDT": 20,
     # Default untuk semua koin lain
-    "DEFAULT": 20
+    # "DEFAULT": 20
 }
 
 # --- Kredensial API ---

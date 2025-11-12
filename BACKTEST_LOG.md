@@ -1,6 +1,852 @@
 
 ---
 
+## Backtest: 2025-10-15 19:25:38
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 10000
+-   **Periode:** ~3 Bulan 15 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `ReversalMomentumRider(A4R)` | 1.0 | $-0.58 | 5 | 20.00% |
+| `UTBotScalper(G1)` | 1.5 | $-47.22 | 546 | 28.75% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $2.19                     |
+| **Net Profit**    | **$-47.81 (-95.61%)**       |
+| Total Trades      | 551                         |
+| Win Rate          | 28.68%                     |
+| Profit Factor     | 0.29                       |
+| Max Drawdown      | 95.95%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-15 19:18:27
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 10000
+-   **Periode:** ~3 Bulan 15 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `ReversalMomentumRider(A4R)` | 1.0 | $-18.17 | 178 | 39.89% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $31.83                     |
+| **Net Profit**    | **$-18.17 (-36.35%)**       |
+| Total Trades      | 178                         |
+| Win Rate          | 39.89%                     |
+| Profit Factor     | 0.67                       |
+| Max Drawdown      | 41.43%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 20:37:07
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 10000
+-   **Periode:** ~3 Bulan 14 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `SMC_SilverBullet(F1)` | 2.0 | $-12.20 | 50 | 30.00% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $37.80                     |
+| **Net Profit**    | **$-12.20 (-24.41%)**       |
+| Total Trades      | 50                         |
+| Win Rate          | 30.00%                     |
+| Profit Factor     | 0.32                       |
+| Max Drawdown      | 24.87%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 20:19:55
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 10000
+-   **Periode:** ~7 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `SMC_Hybrid(E2)` | 1.5 | $-3.17 | 8 | 12.50% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $46.83                     |
+| **Net Profit**    | **$-3.17 (-6.33%)**       |
+| Total Trades      | 8                         |
+| Win Rate          | 12.50%                     |
+| Profit Factor     | 0.16                       |
+| Max Drawdown      | 5.60%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 20:06:29
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 10000
+-   **Periode:** ~7 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `SMC_Hybrid(E2)` | 1.5 | $-3.17 | 8 | 12.50% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $46.83                     |
+| **Net Profit**    | **$-3.17 (-6.33%)**       |
+| Total Trades      | 8                         |
+| Win Rate          | 12.50%                     |
+| Profit Factor     | 0.16                       |
+| Max Drawdown      | 5.60%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 20:04:19
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 15000
+-   **Periode:** ~4 Bulan 8 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `SMC_Hybrid(E1)` | 1.5 | $-6.07 | 39 | 41.03% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $43.93                     |
+| **Net Profit**    | **$-6.07 (-12.14%)**       |
+| Total Trades      | 39                         |
+| Win Rate          | 41.03%                     |
+| Profit Factor     | 0.52                       |
+| Max Drawdown      | 13.64%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 20:02:02
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 15000
+-   **Periode:** ~1 Bulan 0 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `SMC_Hybrid(E2)` | 1.5 | $-1.57 | 19 | 31.58% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $48.43                     |
+| **Net Profit**    | **$-1.57 (-3.14%)**       |
+| Total Trades      | 19                         |
+| Win Rate          | 31.58%                     |
+| Profit Factor     | 0.77                       |
+| Max Drawdown      | 5.78%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 19:55:42
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 10000
+-   **Periode:** ~7 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `SMC_Hybrid(E2)` | 1.5 | $-3.17 | 8 | 12.50% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $46.83                     |
+| **Net Profit**    | **$-3.17 (-6.33%)**       |
+| Total Trades      | 8                         |
+| Win Rate          | 12.50%                     |
+| Profit Factor     | 0.16                       |
+| Max Drawdown      | 5.60%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 15:28:37
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 10000
+-   **Periode:** ~3 Bulan 6 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `SMC_Hybrid(E1)` | 1.5 | $0.67 | 16 | 62.50% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $50.67                     |
+| **Net Profit**    | **$0.67 (+1.34%)**       |
+| Total Trades      | 16                         |
+| Win Rate          | 62.50%                     |
+| Profit Factor     | 1.16                       |
+| Max Drawdown      | 6.61%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 15:15:49
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 10000
+-   **Periode:** ~3 Bulan 15 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `SMC_Hybrid(E1)` | 1.5 | $-6.71 | 85 | 38.82% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $43.29                     |
+| **Net Profit**    | **$-6.71 (-13.41%)**       |
+| Total Trades      | 85                         |
+| Win Rate          | 38.82%                     |
+| Profit Factor     | 0.71                       |
+| Max Drawdown      | 22.19%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 15:13:50
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 10000
+-   **Periode:** ~3 Bulan 15 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `SMC_Hybrid(E1)` | 1.5 | $-40.88 | 381 | 27.03% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $9.12                     |
+| **Net Profit**    | **$-40.88 (-81.76%)**       |
+| Total Trades      | 381                         |
+| Win Rate          | 27.03%                     |
+| Profit Factor     | 0.37                       |
+| Max Drawdown      | 83.03%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 15:07:06
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 5000
+-   **Periode:** ~1 Bulan 22 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `SMC_Hybrid(E1)` | 1.5 | $-5.29 | 93 | 43.01% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $44.71                     |
+| **Net Profit**    | **$-5.29 (-10.57%)**       |
+| Total Trades      | 93                         |
+| Win Rate          | 43.01%                     |
+| Profit Factor     | 0.79                       |
+| Max Drawdown      | 19.00%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 14:44:05
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 5000
+-   **Periode:** ~1 Bulan 22 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `SMC_Hybrid(E1)` | 1.5 | $-17.48 | 124 | 37.10% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $32.52                     |
+| **Net Profit**    | **$-17.48 (-34.97%)**       |
+| Total Trades      | 124                         |
+| Win Rate          | 37.10%                     |
+| Profit Factor     | 0.57                       |
+| Max Drawdown      | 35.04%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 14:36:05
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 5000
+-   **Periode:** ~1 Bulan 22 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `SMC_Hybrid(E1)` | 1.5 | $-7.47 | 98 | 42.86% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $42.53                     |
+| **Net Profit**    | **$-7.47 (-14.94%)**       |
+| Total Trades      | 98                         |
+| Win Rate          | 42.86%                     |
+| Profit Factor     | 0.71                       |
+| Max Drawdown      | 22.54%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 14:29:18
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 5000
+-   **Periode:** ~21 Hari
+-   **Mode Exit:** Statis (SL/TP Bursa)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `SMC_Hybrid(E1)` | 1.5 | $-38.95 | 346 | 28.61% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $11.05                     |
+| **Net Profit**    | **$-38.95 (-77.90%)**       |
+| Total Trades      | 346                         |
+| Win Rate          | 28.61%                     |
+| Profit Factor     | 0.39                       |
+| Max Drawdown      | 77.83%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 14:15:36
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 5000
+-   **Periode:** ~1 Bulan 22 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `SMC_Hybrid(E1)` | 1.5 | $-7.46 | 98 | 42.86% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $42.54                     |
+| **Net Profit**    | **$-7.46 (-14.92%)**       |
+| Total Trades      | 98                         |
+| Win Rate          | 42.86%                     |
+| Profit Factor     | 0.71                       |
+| Max Drawdown      | 22.53%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 13:41:59
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 5000
+-   **Periode:** ~19 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AdaptiveTrendRide(A3)` | 1.0 | $-0.42 | 1 | 0.00% |
+| `SMC_Hybrid(E1)` | 1.5 | $-22.43 | 131 | 29.01% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $27.15                     |
+| **Net Profit**    | **$-22.85 (-45.70%)**       |
+| Total Trades      | 132                         |
+| Win Rate          | 28.79%                     |
+| Profit Factor     | 0.45                       |
+| Max Drawdown      | 48.87%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 12:59:08
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 5000
+-   **Periode:** ~19 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AdaptiveTrendRide(A3)` | 1.0 | $-26.38 | 256 | 31.64% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $23.62                     |
+| **Net Profit**    | **$-26.38 (-52.75%)**       |
+| Total Trades      | 256                         |
+| Win Rate          | 31.64%                     |
+| Profit Factor     | 0.60                       |
+| Max Drawdown      | 52.69%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 12:41:41
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 5000
+-   **Periode:** ~19 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AdaptiveTrendRide(A3)` | 1.0 | $-26.57 | 247 | 30.77% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $23.43                     |
+| **Net Profit**    | **$-26.57 (-53.14%)**       |
+| Total Trades      | 247                         |
+| Win Rate          | 30.77%                     |
+| Profit Factor     | 0.57                       |
+| Max Drawdown      | 53.06%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 12:05:54
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 5000
+-   **Periode:** ~21 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AdaptiveTrendRide(A3)` | 1.0 | $-21.55 | 279 | 34.41% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $28.45                     |
+| **Net Profit**    | **$-21.55 (-43.10%)**       |
+| Total Trades      | 279                         |
+| Win Rate          | 34.41%                     |
+| Profit Factor     | 0.70                       |
+| Max Drawdown      | 48.11%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 11:18:45
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 5000
+-   **Periode:** ~1 Bulan 19 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AdaptiveTrendRide(A3)` | 1.0 | $0.35 | 12 | 41.67% |
+| `ReversalMomentumRider(A4R)` | 1.0 | $0.00 | 0 | N/A |
+| `SmartRegimeScalper(B1)` | 1.0 | $-11.21 | 40 | 22.50% |
+| `EMAPullbackRider(C1)` | 1.2 | $0.00 | 0 | N/A |
+| `DominanBreakout(D1)` | 1.2 | $0.00 | 0 | N/A |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $39.14                     |
+| **Net Profit**    | **$-10.86 (-21.72%)**       |
+| Total Trades      | 52                         |
+| Win Rate          | 26.92%                     |
+| Profit Factor     | 0.34                       |
+| Max Drawdown      | 23.46%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 11:05:58
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 5000
+-   **Periode:** ~1 Bulan 22 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AdaptiveTrendRide(A3)` | 1.0 | $-11.95 | 138 | 36.23% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $38.05                     |
+| **Net Profit**    | **$-11.95 (-23.90%)**       |
+| Total Trades      | 138                         |
+| Win Rate          | 36.23%                     |
+| Profit Factor     | 0.71                       |
+| Max Drawdown      | 24.23%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 10:51:40
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 5000
+-   **Periode:** ~1 Bulan 22 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `ReversalMomentumRider(A4R)` | 1.0 | $-11.91 | 138 | 36.23% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $38.09                     |
+| **Net Profit**    | **$-11.91 (-23.81%)**       |
+| Total Trades      | 138                         |
+| Win Rate          | 36.23%                     |
+| Profit Factor     | 0.71                       |
+| Max Drawdown      | 24.14%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 10:38:59
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 5000
+-   **Periode:** ~22 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `ReversalMomentumRider(A4R)` | 1.0 | $-25.68 | 335 | 32.24% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $24.32                     |
+| **Net Profit**    | **+$-25.68 (+-51.37%)**       |
+| Total Trades      | 335                         |
+| Win Rate          | 32.24%                     |
+| Profit Factor     | 0.66                       |
+| Max Drawdown      | 56.66%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 10:35:51
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 5000
+-   **Periode:** ~22 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AdaptiveTrendRide(A3)` | 1.0 | $-11.67 | 153 | 36.60% |
+| `ReversalMomentumRider(A4R)` | 1.0 | $0.00 | 0 | N/A |
+| `SmartRegimeScalper(B1)` | 1.0 | $-12.28 | 106 | 38.68% |
+| `EMAPullbackRider(C1)` | 1.2 | $0.00 | 0 | N/A |
+| `DominanBreakout(D1)` | 1.2 | $0.00 | 0 | N/A |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $26.05                     |
+| **Net Profit**    | **+$-23.95 (+-47.90%)**       |
+| Total Trades      | 259                         |
+| Win Rate          | 37.45%                     |
+| Profit Factor     | 0.58                       |
+| Max Drawdown      | 49.94%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-10-14 10:32:35
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 5000
+-   **Periode:** ~22 Hari
+-   **Mode Exit:** Statis (SL/TP Bursa)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AdaptiveTrendRide(A3)` | 1.0 | $-10.94 | 152 | 36.84% |
+| `ReversalMomentumRider(A4R)` | 1.0 | $0.00 | 0 | N/A |
+| `SmartRegimeScalper(B1)` | 1.0 | $-12.68 | 107 | 38.32% |
+| `EMAPullbackRider(C1)` | 1.2 | $0.00 | 0 | N/A |
+| `DominanBreakout(D1)` | 1.2 | $0.00 | 0 | N/A |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $26.39                     |
+| **Net Profit**    | **+$-23.61 (+-47.23%)**       |
+| Total Trades      | 259                         |
+| Win Rate          | 37.45%                     |
+| Profit Factor     | 0.59                       |
+| Max Drawdown      | 48.98%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
 ## Backtest: 2025-10-14 08:50:20
 
 **Parameter:**

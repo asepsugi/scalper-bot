@@ -54,30 +54,14 @@ def main():
         logging.error("Tidak ada data untuk dianalisis. Keluar.")
         return
 
-    # --- PERBAIKAN BESAR: Agregasi hasil per strategi ---
-    console.log(f"Loaded {len(all_symbol_results)} results across multiple symbols. Aggregating by strategy version...")
+    # --- PERBAIKAN: Langsung gunakan data karena sudah diagregasi oleh backtester ---
+    console.log(f"Loaded {len(all_symbol_results)} aggregated strategy results.")
     df = pd.DataFrame(all_symbol_results)
 
     # Ganti nilai inf dengan NaN untuk perhitungan yang aman
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
 
-    agg_results = df.groupby('version').agg(
-        # Metrik yang dijumlahkan
-        total_trades=('total_trades', 'sum'),
-        # Metrik yang dirata-ratakan
-        net_profit_pct=('net_profit_pct', 'mean'),
-        win_rate=('win_rate', 'mean'),
-        avg_rr=('avg_rr', 'mean'),
-        profit_factor=('profit_factor', 'mean'),
-        max_drawdown=('max_drawdown', 'mean'), # Rata-rata drawdown adalah proxy yang baik
-        sharpe_ratio=('sharpe_ratio', 'mean'),
-        avg_trade_duration=('avg_trade_duration', 'mean'),
-        # Metrik lain
-        num_symbols_tested=('symbol', 'nunique')
-    ).reset_index()
-
-    # Konversi hasil agregasi kembali ke format list of dictionaries
-    aggregated_metrics_list = agg_results.to_dict('records')
+    aggregated_metrics_list = df.to_dict('records')
 
     all_processed_metrics = []
 

@@ -53,19 +53,22 @@ def signal_version_B1(df):
     REVISED Strategy B1: Smart Regime Filter.
     Adapts its entry logic based on market conditions (Trending, Ranging, or Volatile).
     """
+    # --- REVISI: Baca parameter dari config terpusat ---
+    cfg = CONFIG['strategy_b1_regime_filter']
+
     # --- LANGKAH 1: Tentukan Rezim Pasar ---
     adx = df[f"ADX_{CONFIG['atr_period']}"]
     atr_delta = df['ATR_delta'] # Indikator baru dari data_preparer
 
     # Kondisi Rezim
-    is_trending = (adx > 23)
-    is_ranging = (adx < 18)
-    is_volatile = (atr_delta > 1.5) # Lonjakan volatilitas mendadak
+    is_trending = (adx > cfg['adx_trending_threshold'])
+    is_ranging = (adx < cfg['adx_ranging_threshold'])
+    is_volatile = (atr_delta > cfg['atr_delta_volatile_threshold']) # Lonjakan volatilitas mendadak
 
     # --- LANGKAH 2: Definisikan Logika Sinyal untuk Setiap Rezim ---
     # Sinyal untuk Pasar Trending (mengikuti tren)
-    long_trending_signal = (df['close'] > df['trend_ema_15m']) & (df['rsi_15m'] > 55)
-    short_trending_signal = (df['close'] < df['trend_ema_15m']) & (df['rsi_15m'] < 45)
+    long_trending_signal = (df['close'] > df['trend_ema_15m']) & (df['rsi_15m'] > cfg['rsi_trending_long'])
+    short_trending_signal = (df['close'] < df['trend_ema_15m']) & (df['rsi_15m'] < cfg['rsi_trending_short'])
 
     # Sinyal untuk Pasar Ranging (kontrarian/reversal)
     long_ranging_signal = df['rsi_cross_long'] # Menggunakan RSI cross dari data_preparer
@@ -97,8 +100,8 @@ def signal_version_B1(df):
     # --- LANGKAH 4: Tentukan Parameter Exit ---
     # Parameter exit bisa tetap sederhana atau dibuat dinamis juga
     exit_params = {
-        'sl_multiplier': 1.8,
-        'rr_ratio': 1.6
+        'sl_multiplier': cfg['sl_multiplier'],
+        'rr_ratio': cfg['rr_ratio']
     }
 
     # Konversi hasil np.where (array) kembali ke pandas Series
@@ -143,23 +146,389 @@ def signal_version_C1(df):
 
     return long_signal, short_signal, exit_params
 
+def signal_version_D1_breakout(df):
+    """
+    Strategi Breakout & Reversal (Dominan Break & CB1).
+    - Mengidentifikasi level S/R minor secara dinamis.
+    - Mencari sinyal reversal (Dominan Break) di sekitar S/R.
+    - Mencari sinyal breakout (CB1) yang valid.
+    """
+    exit_params = {
+        'sl_multiplier': 1.0, # SL lebih ketat, tepat di level S/R
+        'rr_ratio': 2.0       # Target RRR minimal 1:2
+    }
+
+    # 1. Identifikasi Support & Resistance minor (misal, 20 candle terakhir)
+    # Ini adalah S/R jangka pendek untuk scalping, dihitung secara rolling.
+    window = 20
+    support = df['low'].rolling(window=window, min_periods=5).min().shift(1)
+    resistance = df['high'].rolling(window=window, min_periods=5).max().shift(1)
+
+    # 2. Hitung kekuatan body candle
+    body_size = abs(df['close'] - df['open'])
+    candle_range = df['high'] - df['low']
+    body_strength = (body_size / candle_range).fillna(0)
+    is_strong_body = (body_strength > CONFIG.get("body_strength_threshold", 0.6))
+
+    # --- Logika Sinyal LONG ---
+
+    # Skenario 1: Dominan Break Bullish (Reversal dari Support)
+    # Candle bullish kuat close di atas support setelah sebelumnya ada candle yang menyentuh/menembus support.
+    prev_low_touches_support = (df['low'].shift(1) <= support)
+    is_bullish_candle = (df['close'] > df['open'])
+    reclaim_support = (df['close'] > support)
+    
+    long_dominant_break = is_bullish_candle & is_strong_body & prev_low_touches_support & reclaim_support
+
+    # Skenario 2: Candle Break 1 (CB1 Bullish)
+    # Candle sebelumnya (CB1) menembus resistance, candle saat ini konfirmasi dengan close di atasnya.
+    cb1_breaks_resistance = (df['close'].shift(1) > resistance)
+    confirmation_candle = (df['close'] > resistance) & is_strong_body
+
+    long_cb1 = cb1_breaks_resistance & confirmation_candle
+
+    # --- Logika Sinyal SHORT ---
+
+    # Skenario 3: Dominan Break Bearish (Continuation/Breakdown)
+    # Candle bearish kuat close di bawah support.
+    is_bearish_candle = (df['close'] < df['open'])
+    break_support = (df['close'] < support)
+
+    short_dominant_break = is_bearish_candle & is_strong_body & break_support
+
+    # Skenario 4: Candle Break 1 (CB1 Bearish)
+    # Candle sebelumnya (CB1) menembus support, candle saat ini konfirmasi dengan close di bawahnya.
+    cb1_breaks_support = (df['close'].shift(1) < support)
+    confirmation_candle_short = (df['close'] < support) & is_strong_body
+
+    short_cb1 = cb1_breaks_support & confirmation_candle_short
+
+    return (long_dominant_break | long_cb1), (short_dominant_break | short_cb1), exit_params
+
+def signal_version_E1_smc(df):
+    """
+    Strategi Hibrida V2: SMC Zones + Confluence Filter + CB1 Trigger.
+    - Konfirmasi tren HTF (BOS).
+    - Membutuhkan konfluensi minimal 2 dari 3: OB, FVG, CB1.
+    - Menggunakan candle dengan body kuat sebagai pemicu akhir.
+    - Menambahkan filter waktu, volatilitas, dan jarak pivot.
+    - REVISI: Menambahkan filter Volume Spike pada pemicu CB1.
+    """
+    # --- PERBAIKAN: Gunakan parameter exit dari config global untuk fleksibilitas ---
+    # Ini memungkinkan Anda menyesuaikan SL/TP dari satu tempat.
+    exit_params = {
+        'sl_multiplier': CONFIG['atr_multiplier'], # Menggunakan pengali ATR global
+        'rr_ratio': CONFIG['risk_reward_ratio']    # Menggunakan rasio R/R global
+    }
+
+    # --- 1. Filter Kondisi Pasar & Waktu (BARU) ---
+    cfg_filters = CONFIG['trade_filters']
+    
+    # Filter Waktu: Jangan trade pada jam-jam yang dihindari
+    time_filter = ~df.index.hour.isin(cfg_filters['avoid_hours_utc'])
+    
+    # Filter Volatilitas: Jangan trade saat ada lonjakan ATR yang ekstrem (indikasi news)
+    volatility_spike_filter = (df['ATR_delta'] < cfg_filters['max_atr_delta_spike'])
+
+    # REVISI (C.1): Filter Volatilitas Minimum: Hanya trade jika ATR saat ini > persentil ATR rolling.
+    min_volatility_filter = (df[f"ATRr_{CONFIG['atr_period']}"] > df['atr_percentile'])
+
+    # Filter Jarak Pivot: Jangan trade terlalu dekat dengan swing high/low terakhir
+    atr_val = df[f"ATRr_{CONFIG['atr_period']}"]
+    min_dist = atr_val * cfg_filters['min_pivot_distance_atr']
+    distance_from_high = abs(df['close'] - df['smc_recent_swing_high'])
+    distance_from_low = abs(df['close'] - df['smc_recent_swing_low'])
+    pivot_distance_filter = (distance_from_high > min_dist) & (distance_from_low > min_dist)
+
+    # --- 2. Filter Tren HTF ---
+    # Hanya trade sesuai arah Break of Structure (BOS) terakhir di HTF.
+    is_bullish_trend = (df['smc_trend'] == 'BOS_UP')
+    is_bearish_trend = (df['smc_trend'] == 'BOS_DOWN')
+
+    # --- 3. Filter Kekuatan Candle (CB1) & Volume Spike (REVISI A.1) ---
+    body_size = abs(df['close'] - df['open'])
+    candle_range = df['high'] - df['low']
+    body_strength = (body_size / candle_range).fillna(0)
+    is_strong_body = (body_strength >= CONFIG.get("body_strength_threshold", 0.6))
+
+    # Pemicu CB1 sekarang harus memiliki body kuat DAN volume di atas rata-rata.
+    volume_spike_filter = (df['Volume_spike'] > 1.0)
+    cb1_bullish_momentum = is_strong_body & (df['close'] > df['open']) & volume_spike_filter
+    cb1_bearish_momentum = is_strong_body & (df['close'] < df['open']) & volume_spike_filter
+
+    # --- 4. Kondisi Konfluensi (OB & FVG) ---
+    # Cek apakah harga saat ini berada di dalam zona OB atau FVG yang relevan.
+    
+    # Kondisi Bullish: Harga di Discount Zone & menyentuh Bullish OB atau Bullish FVG
+    in_bullish_ob = (df['smc_ob_type'] == 'BULLISH_OB') & (df['low'] <= df['smc_ob_top']) & (df['high'] >= df['smc_ob_bottom'])
+    in_bullish_fvg = (df['smc_fvg_bottom'].notna()) & (df['low'] <= df['smc_fvg_top']) & (df['high'] >= df['smc_fvg_bottom'])
+    in_discount_zone = ~df['smc_is_premium']
+
+    # Kondisi Bearish: Harga di Premium Zone & menyentuh Bearish OB atau Bearish FVG
+    in_bearish_ob = (df['smc_ob_type'] == 'BEARISH_OB') & (df['low'] <= df['smc_ob_top']) & (df['high'] >= df['smc_ob_bottom'])
+    in_bearish_fvg = (df['smc_fvg_top'].notna()) & (df['low'] <= df['smc_fvg_top']) & (df['high'] >= df['smc_fvg_bottom'])
+    in_premium_zone = df['smc_is_premium']
+
+    # --- 5. Logika Sinyal Akhir (2 dari 3) ---
+    # Hitung skor konfluensi untuk setiap candle
+    # Skor = (apakah di OB?) + (apakah di FVG?) + (apakah ada momentum CB1?)
+    bullish_confluence_score = in_bullish_ob.astype(int) + in_bullish_fvg.astype(int) + cb1_bullish_momentum.astype(int)
+    bearish_confluence_score = in_bearish_ob.astype(int) + in_bearish_fvg.astype(int) + cb1_bearish_momentum.astype(int)
+
+    # Gabungkan semua filter kondisi pasar utama
+    market_condition_filters = time_filter & volatility_spike_filter & min_volatility_filter & pivot_distance_filter
+
+    # Sinyal LONG: Tren Bullish + di Zona Diskon + Skor Konfluensi >= 2
+    long_signal = market_condition_filters & is_bullish_trend & in_discount_zone & (bullish_confluence_score >= 2)
+
+    # Sinyal SHORT: Tren Bearish + di Zona Premium + Skor Konfluensi >= 2
+    short_signal = market_condition_filters & is_bearish_trend & in_premium_zone & (bearish_confluence_score >= 2)
+
+    return long_signal, short_signal, exit_params
+
+def signal_version_E2_smc(df):
+    """
+    Strategi Hibrida V3 (E2): SMC OB Retest dengan Konfirmasi Fleksibel.
+    - Menggunakan EMA 200 sebagai bias tren utama.
+    - Entry pada retest Order Block (OB) yang valid.
+    - Konfirmasi entry bisa dari CB1 (Candle Break) ATAU Volume Spike.
+    - Filter sesi Asia yang lebih selektif berdasarkan volatilitas.
+    - Mendukung mode kontrarian opsional.
+    """
+    # --- 1. Konfigurasi & Parameter Exit Dinamis ---
+    cfg_smc = CONFIG['smc_filters']
+    cfg_filters = CONFIG['trade_filters']
+    atr_val = df[f"ATRr_{CONFIG['atr_period']}"]
+
+    # RR dinamis berdasarkan volatilitas ATR
+    # Jika ATR tinggi, gunakan RR lebih rendah. Jika ATR rendah, targetkan RR lebih tinggi.
+    atr_percentile_75 = df[f"ATRr_{CONFIG['atr_period']}"].rolling(window=672).quantile(0.75).bfill()
+
+    # REVISI: Sesuaikan risk per trade sesuai spesifikasi E2
+    CONFIG['risk_per_trade'] = 0.0075 # 0.75%
+
+    dynamic_rr = np.where(atr_val > atr_percentile_75, 1.2, 2.0)
+
+    exit_params = {
+        'sl_multiplier': CONFIG['atr_multiplier'],
+        'rr_ratio': dynamic_rr
+    }
+
+    # --- 2. Filter Tren Utama & Sesi ---
+    # Tren utama menggunakan EMA 200 pada TF sinyal (15m)
+    is_bullish_trend = (df['close'] > df['trend_ema_200_15m'])
+    is_bearish_trend = (df['close'] < df['trend_ema_200_15m'])
+
+    # Filter Sesi: Boleh trade di sesi Asia hanya jika volatilitas cukup tinggi
+    is_asia_session = df.index.hour.isin([0, 1, 2, 3, 4]) # UTC 0-4
+    # REVISI: Sederhanakan filter volatilitas Asia agar tidak terlalu ketat.
+    # Cukup pastikan ATR saat ini lebih besar dari persentil ke-35 (baseline volatilitas).
+    asia_volatility_ok = (atr_val > df['atr_percentile'])
+    session_filter = ~is_asia_session | (is_asia_session & asia_volatility_ok)
+
+    # --- 3. Kondisi Zona & Konfirmasi Entry ---
+    # Zona: Harga harus berada di dalam Order Block yang valid
+    in_bullish_ob = (df['smc_ob_type'] == 'BULLISH_OB') & (df['low'] <= df['smc_ob_top']) & (df['high'] >= df['smc_ob_bottom'])
+    in_bearish_ob = (df['smc_ob_type'] == 'BEARISH_OB') & (df['low'] <= df['smc_ob_top']) & (df['high'] >= df['smc_ob_bottom'])
+
+    # Konfirmasi A: CB1 (Candle Break 1)
+    body_size = abs(df['close'] - df['open'])
+    candle_range = df['high'] - df['low']
+    body_strength = (body_size / candle_range).fillna(0)
+    is_strong_body = (body_strength >= CONFIG.get("body_strength_threshold", 0.6))
+    cb1_bullish = is_strong_body & (df['close'] > df['open'])
+    cb1_bearish = is_strong_body & (df['close'] < df['open'])
+
+    # Konfirmasi B: Volume Spike
+    volume_spike = (df['Volume_spike'] > 0.8)
+
+    # Gabungkan konfirmasi: Cukup salah satu (CB1 ATAU Volume Spike)
+    bullish_confirmation = cb1_bullish | volume_spike
+    bearish_confirmation = cb1_bearish | volume_spike
+
+    # --- 4. Logika Sinyal Final ---
+    
+    # Sinyal Pro-Trend
+    long_pro_trend = is_bullish_trend & in_bullish_ob & bullish_confirmation
+    short_pro_trend = is_bearish_trend & in_bearish_ob & bearish_confirmation
+
+    # Sinyal Kontrarian (jika diizinkan)
+    long_contrarian = pd.Series(False, index=df.index)
+    short_contrarian = pd.Series(False, index=df.index)
+    if cfg_smc['allow_contrarian_mode']:
+        # Ambil posisi long di bearish trend jika ada konfirmasi kuat di Bullish OB
+        long_contrarian = is_bearish_trend & in_bullish_ob & bullish_confirmation
+        # Ambil posisi short di bullish trend jika ada konfirmasi kuat di Bearish OB
+        short_contrarian = is_bullish_trend & in_bearish_ob & bearish_confirmation
+        
+        # Untuk kontrarian, paksa RR lebih tinggi
+        exit_params['rr_ratio'] = np.where(long_contrarian | short_contrarian, 2.0, exit_params['rr_ratio'])
+
+    # Gabungkan sinyal pro-trend dan kontrarian, lalu terapkan filter sesi
+    final_long_signal = (long_pro_trend | long_contrarian) & session_filter
+    final_short_signal = (short_pro_trend | short_contrarian) & session_filter
+
+    return final_long_signal, final_short_signal, exit_params
+
+def signal_version_F1_silver_bullet(df):
+    """
+    Strategi ICT "Silver Bullet" (F1).
+    - Hanya aktif pada jam sesi NY AM & PM.
+    - Mencari setup: Liquidity Sweep -> Displacement dengan FVG -> Entry di FVG.
+    """
+    cfg = CONFIG['strategy_f1_silver_bullet']
+    exit_params = {
+        'sl_multiplier': 1.5, # SL ditempatkan di atas/bawah FVG candle, jadi ATR mult bisa lebih besar
+        'rr_ratio': 2.0       # Target RR minimal 2:1
+    }
+
+    # --- 1. Filter Waktu (Killzone) ---
+    # Gabungkan jam sesi AM dan PM ke dalam satu list
+    killzone_hours = cfg['am_session_utc'] + cfg['pm_session_utc']
+    in_killzone = df.index.hour.isin(killzone_hours)
+
+    # --- 2. Deteksi Liquidity Sweep & Market Structure Shift (MSS) ---
+    # --- REVISI LOGIKA F1 (FINAL) ---
+    # Pendekatan yang lebih robust:
+    # 1. Cari candle "Displacement" (MSS + FVG baru).
+    # 2. Untuk setiap displacement, lihat ke belakang (lookback) apakah ada sweep.
+    # 3. Jika ya, tandai FVG itu sebagai valid dan tunggu retracement.
+
+    lookback = cfg['lookback_period']
+
+    # --- Langkah 1: Identifikasi "Displacement" ---
+    # Displacement adalah pergerakan kuat yang mematahkan struktur (MSS) DAN meninggalkan FVG.
+
+    # Kondisi MSS (Market Structure Shift)
+    mss_down = (df['close'] < df['smc_recent_swing_low'].shift(1))
+    mss_up = (df['close'] > df['smc_recent_swing_high'].shift(1))
+
+    # Tandai candle yang merupakan FVG baru
+    is_new_bearish_fvg = (df['smc_fvg_top'].notna()) & (df['smc_fvg_top'] != df['smc_fvg_top'].shift(1))
+    is_new_bullish_fvg = (df['smc_fvg_bottom'].notna()) & (df['smc_fvg_bottom'] != df['smc_fvg_bottom'].shift(1))
+
+    # Gabungkan: Displacement = MSS + FVG baru pada candle yang sama
+    bearish_displacement_candle = mss_down & is_new_bearish_fvg
+    bullish_displacement_candle = mss_up & is_new_bullish_fvg
+
+    # --- Langkah 2: Konfirmasi bahwa Displacement didahului oleh Liquidity Sweep ---
+    # Cek apakah ada sweep dalam 'lookback' candle SEBELUM displacement terjadi.
+    # Sweep: High dari window rolling > high sebelum window, atau Low dari window < low sebelum window.
+    sweep_high_before_displacement = (df['high'].rolling(window=lookback).max().shift(1) > df['smc_recent_swing_high'].shift(lookback))
+    sweep_low_before_displacement = (df['low'].rolling(window=lookback).min().shift(1) < df['smc_recent_swing_low'].shift(lookback))
+
+    # Setup Silver Bullet valid jika ada displacement yang didahului oleh sweep
+    valid_bearish_setup_candle = bearish_displacement_candle & sweep_high_before_displacement
+    valid_bullish_setup_candle = bullish_displacement_candle & sweep_low_before_displacement
+
+    # --- Langkah 3: "Ingat" FVG yang valid dan tunggu harga kembali ---
+    # Gunakan ffill untuk mengisi maju informasi FVG yang valid.
+    df['sb_fvg_top_b'] = np.where(valid_bearish_setup_candle, df['smc_fvg_top'], np.nan)
+    df['sb_fvg_bottom_b'] = np.where(valid_bearish_setup_candle, df['smc_fvg_bottom'], np.nan)
+    df['sb_fvg_top_b'] = df['sb_fvg_top_b'].ffill()
+    df['sb_fvg_bottom_b'] = df['sb_fvg_bottom_b'].ffill()
+
+    df['sb_fvg_top_l'] = np.where(valid_bullish_setup_candle, df['smc_fvg_top'], np.nan)
+    df['sb_fvg_bottom_l'] = np.where(valid_bullish_setup_candle, df['smc_fvg_bottom'], np.nan)
+    df['sb_fvg_top_l'] = df['sb_fvg_top_l'].ffill()
+    df['sb_fvg_bottom_l'] = df['sb_fvg_bottom_l'].ffill()
+
+    # Kondisi Entry: Harga saat ini masuk ke dalam FVG valid terakhir
+    retrace_to_bearish_fvg = (df['high'] >= df['sb_fvg_bottom_b']) & (df['low'] <= df['sb_fvg_top_b'])
+    retrace_to_bullish_fvg = (df['low'] <= df['sb_fvg_top_l']) & (df['high'] >= df['sb_fvg_bottom_l'])
+
+    # Sinyal final: Harus di dalam killzone DAN harga retrace ke FVG yang valid
+    # Harus di dalam killzone DAN harga retrace ke FVG yang valid
+    short_signal = in_killzone & retrace_to_bearish_fvg
+    long_signal = in_killzone & retrace_to_bullish_fvg
+
+    # --- PERBAIKAN: Pastikan tidak ada sinyal berlawanan pada candle yang sama ---
+    # Jika long_signal dan short_signal keduanya True, batalkan keduanya.
+    conflicting_signals = long_signal & short_signal
+    long_signal[conflicting_signals] = False
+    short_signal[conflicting_signals] = False
+
+    # --- PERBAIKAN SL: SL seharusnya di atas/bawah candle yang membuat FVG ---
+    # Ini sulit dilakukan secara murni vectorized. Untuk saat ini, kita gunakan
+    # SL berbasis ATR yang ditempatkan di luar zona FVG sebagai proxy yang baik.
+    # SL Long: di bawah FVG bottom. SL Short: di atas FVG top.
+    # Logika ini akan dihandle oleh `create_pending_order` yang menempatkan SL
+    # berdasarkan ATR dari harga limit, yang sudah berada di dalam FVG.
+    # Jadi, `exit_params` yang ada sudah cukup memadai.
+
+    return long_signal, short_signal, exit_params
+
+def signal_version_G1_ut_bot(df):
+    """
+    Strategi Scalping 1-Menit dari YouTube (G1).
+    - Link: https://www.youtube.com/watch?v=WScZLXOHkAk
+    - Menggunakan EMA 200 untuk tren dan sinyal "Buy/Sell" dari UT Bot (SuperTrend).
+    - Didesain untuk timeframe cepat, namun diadaptasi untuk sistem 15m.
+    """
+    exit_params = {
+        'sl_multiplier': 1.5, # SL ditempatkan di swing low/high terdekat, ATR adalah proxy
+        'rr_ratio': 1.5       # RR sesuai video 1:1.5
+    }
+
+    # --- 1. Filter Tren Utama ---
+    # Sesuai video, gunakan EMA 200. Kita gunakan proxy dari TF 15m.
+    is_uptrend = (df['close'] > df['trend_ema_200_15m'])
+    is_downtrend = (df['close'] < df['trend_ema_200_15m'])
+
+    # --- 2. Sinyal dari UT Bot (SuperTrend) ---
+    # pandas-ta menghasilkan kolom SUPERT_1_1.0, SUPERTd_1_1.0, SUPERTl_1_1.0, SUPERTs_1_1.0
+    # Sinyal "Buy" terjadi ketika arah tren SuperTrend berubah dari turun ke naik.
+    # Ini ditandai dengan kolom arah (SUPERTd) berubah dari -1 ke 1.
+    ut_bot_buy_signal = (df['SUPERTd_1_1.0'] == 1) & (df['SUPERTd_1_1.0'].shift(1) == -1)
+
+    # Sinyal "Sell" terjadi ketika arah tren SuperTrend berubah dari naik ke turun.
+    # Ini ditandai dengan kolom arah (SUPERTd) berubah dari 1 ke -1.
+    ut_bot_sell_signal = (df['SUPERTd_1_1.0'] == -1) & (df['SUPERTd_1_1.0'].shift(1) == 1)
+
+    # --- 3. Gabungkan Kondisi ---
+    long_signal = is_uptrend & ut_bot_buy_signal
+    short_signal = is_downtrend & ut_bot_sell_signal
+
+    return long_signal, short_signal, exit_params
+
+
 # --- REVISI: Konfigurasi Strategi Terpusat ---
 # Menggabungkan peta strategi dan bobotnya di satu tempat untuk mempermudah pengelolaan.
 STRATEGY_CONFIG = {
-    "AdaptiveTrendRide(A3)": {
-        "function": signal_version_A3,
-        "weight": 1.0
-    },
+    # "AdaptiveTrendRide(A3)": {
+    #     "function": signal_version_A3,
+    #     "weight": 1.0
+    # },
     "ReversalMomentumRider(A4R)": {
         "function": signal_version_A4R,
         "weight": 1.0
     },
-    "SmartRegimeScalper(B1)": {
-        "function": signal_version_B1,
-        "weight": 1.0 
-    },
-    "EMAPullbackRider(C1)": {
-        "function": signal_version_C1,
-        "weight": 1.2 # Beri bobot sedikit lebih tinggi karena dirancang untuk sistem ini
+    # "SmartRegimeScalper(B1)": {
+    #     "function": signal_version_B1,
+    #     "weight": 1.0 
+    # },
+    # "EMAPullbackRider(C1)": {
+    #     "function": signal_version_C1,
+    #     "weight": 1.2 # Beri bobot sedikit lebih tinggi karena dirancang untuk sistem ini
+    # },
+    # "DominanBreakout(D1)": {
+    #     "function": signal_version_D1_breakout,
+    #     "weight": 1.2
+    # },
+    # "SMC_Hybrid(E1)": {
+    #     "function": signal_version_E1_smc,
+    #     "weight": 1.5 # Beri bobot tinggi karena ini strategi yang sangat spesifik
+    # },
+    # "SMC_Hybrid(E2)": {
+    #     "function": signal_version_E2_smc,
+    #     "weight": 1.5
+    # },
+    # "SMC_SilverBullet(F1)": {
+    #     "function": signal_version_F1_silver_bullet,
+    #     "weight": 2.0 # Bobot sangat tinggi karena ini setup probabilitas tinggi
+    # },
+    "UTBotScalper(G1)": {
+        "function": signal_version_G1_ut_bot,
+        "weight": 1.5
     }
 }
