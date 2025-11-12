@@ -88,7 +88,9 @@ def run_scan(backtester, symbols, limit):
     for i in range(len(all_timestamps) - 1):
         current_time = all_timestamps[i]
         next_time = all_timestamps[i+1]
-        backtester.check_trades_and_orders(current_time, next_time, all_data)
+        # REVISI: Gunakan fungsi backtest yang lebih realistis
+        # backtester.check_trades_and_orders(current_time, next_time, all_data)
+        backtester.check_trades_and_orders_fixed(current_time, next_time, all_data)
         if current_time in signals_by_time:
             backtester.process_new_signal(signals_by_time[current_time], all_data)
 
@@ -145,3 +147,4 @@ if __name__ == "__main__":
 
     run_scan(backtester, symbols=symbols_to_scan, limit=args.limit)
     backtester.get_results(args=args)
+    backtester.get_results_with_realism_report(args=args)

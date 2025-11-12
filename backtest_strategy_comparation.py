@@ -135,7 +135,9 @@ if __name__ == "__main__":
                 # Temukan sinyal yang terjadi pada timestamp ini
                 current_signals = [s for s in sorted_signals if s['timestamp'] == current_time]
                 
-                backtester.check_trades_and_orders(current_time, next_time, all_data)
+                # REVISI: Gunakan fungsi backtest yang lebih realistis untuk hasil yang andal
+                # backtester.check_trades_and_orders(current_time, next_time, all_data)
+                backtester.check_trades_and_orders_fixed(current_time, next_time, all_data)
                 for signal in current_signals:
                     backtester.process_new_signal(signal, all_data)
 

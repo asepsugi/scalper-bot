@@ -28,6 +28,13 @@ class PortfolioBacktester:
         # --- FITUR BARU: Lacak waktu trade terakhir untuk cooldown ---
         self.last_trade_time = {} # symbol -> timestamp
         self.exchange = None # Akan diinisialisasi oleh skrip pemanggil
+        # NEW: Track fill statistics
+        self.limit_order_stats = {
+            'attempted': 0,
+            'filled': 0,
+            'expired': 0,
+            'fill_rate': 0.0
+        }
 
     def fetch_and_prepare_symbol_data(self, symbol, limit):
         """Helper function to fetch and prepare data for a single symbol."""
@@ -94,106 +101,6 @@ class PortfolioBacktester:
         default_leverage = risk_params['default_leverage']
 
         self.create_pending_order(signal_row_dict, signal_time, full_data, exit_params, symbol, current_risk_per_trade, default_leverage)
-
-    def check_trades_and_orders(self, start_time, end_time, all_data):
-        """
-        Optimized function to check for trade exits and pending order fills
-        only within the new candle range (start_time to end_time).
-        """
-        closed_symbols = []
-        for symbol, trade_details in list(self.active_positions.items()):
-            full_data = all_data.get(symbol)
-            if full_data is None: continue
-
-            check_start = max(start_time, trade_details['entry_time'])
-            if end_time <= check_start: continue
-
-            candles_to_check = full_data.loc[check_start:end_time].iloc[1:]
-            if candles_to_check.empty: continue
-
-            exit_reason = None
-            exit_price = None
-            exit_time = None
-            for idx, candle in candles_to_check.iterrows():
-                if LIVE_TRADING_CONFIG.get("trailing_sl_enabled", False):
-                    is_trailing_active = trade_details.get('trailing_sl_active', False)
-                    risk_distance = abs(trade_details['entry_price'] - trade_details['initial_sl'])
-                    if risk_distance > 0:
-                        current_rr = abs(candle['close'] - trade_details['entry_price']) / risk_distance
-                        if not is_trailing_active and current_rr >= LIVE_TRADING_CONFIG.get("trailing_sl_trigger_rr", 1.0):
-                            trade_details['trailing_sl_active'] = True
-                            is_trailing_active = True
-                    
-                    if is_trailing_active:
-                        atr_val = candle[f"ATRr_{CONFIG['atr_period']}"]
-                        trail_dist = atr_val * LIVE_TRADING_CONFIG.get("trailing_sl_distance_atr", 1.5)
-                        if trade_details['direction'] == 'LONG':
-                            trade_details['sl_price'] = max(trade_details['sl_price'], candle['close'] - trail_dist)
-                        else:
-                            trade_details['sl_price'] = min(trade_details['sl_price'], candle['close'] + trail_dist)
-
-                cb_multiplier = LIVE_TRADING_CONFIG.get("circuit_breaker_multiplier", 1.5)
-                sl_breach_threshold = abs(trade_details['entry_price'] - trade_details['initial_sl']) * (cb_multiplier - 1.0)
-                
-                price_breached = False
-                if trade_details['direction'] == 'LONG' and candle['low'] < (trade_details['sl_price'] - sl_breach_threshold):
-                    price_breached = True
-                    exit_price = trade_details['sl_price'] - sl_breach_threshold
-                elif trade_details['direction'] == 'SHORT' and candle['high'] > (trade_details['sl_price'] + sl_breach_threshold):
-                    price_breached = True
-                    exit_price = trade_details['sl_price'] + sl_breach_threshold
-
-                if price_breached:
-                    avg_volume = full_data.loc[idx, f"VOL_{CONFIG['volume_lookback']}"]
-                    if candle['volume'] > (avg_volume * 2.0):
-                        exit_time = idx
-                        exit_reason = "Circuit Breaker"
-                        break
-
-                current_sl_price = trade_details['sl_price']
-                
-                if (trade_details['direction'] == 'LONG' and candle['close'] <= current_sl_price) or \
-                   (trade_details['direction'] == 'SHORT' and candle['close'] >= current_sl_price):
-                    exit_price, exit_time, exit_reason = candle['close'], idx, "Stop Loss (Close)"
-                    break
-                
-                if not trade_details.get('trailing_sl_active', False) and \
-                   ((trade_details['direction'] == 'LONG' and candle['close'] >= trade_details['tp_price']) or \
-                   (trade_details['direction'] == 'SHORT' and candle['close'] <= trade_details['tp_price'])):
-                    exit_price, exit_time, exit_reason = candle['close'], idx, "Take Profit (Close)"
-                    break
-            
-            if exit_reason:
-                self.close_trade(symbol, exit_price, exit_time, exit_reason)
-                closed_symbols.append(symbol)
-
-        for symbol in closed_symbols:
-            if symbol in self.active_positions:
-                del self.active_positions[symbol]
-        
-        filled_symbols = []
-        expired_symbols = []
-        for symbol, order_details in list(self.pending_orders.items()):
-            full_data = all_data.get(symbol)
-            if full_data is None: continue
-            
-            if end_time > order_details['expiration_time']:
-                expired_symbols.append(symbol)
-                continue
-
-            candles_to_check = full_data.loc[start_time:end_time].iloc[1:]
-            for fill_time, candle in candles_to_check.iterrows():
-                if (order_details['direction'] == 'LONG' and candle['low'] <= order_details['limit_price']) or \
-                   (order_details['direction'] == 'SHORT' and candle['high'] >= order_details['limit_price']):
-                    self.open_trade(symbol, order_details, fill_time=fill_time)
-                    filled_symbols.append(symbol)
-                    break
-
-        for symbol in filled_symbols + expired_symbols:
-            if symbol in self.pending_orders:
-                if symbol in expired_symbols:
-                    console.log(f"[yellow]Pending order for {symbol} expired at {end_time}.[/yellow]")
-                del self.pending_orders[symbol]
 
     def open_trade(self, symbol, order_details, fill_time):
         if symbol in self.active_positions: return
@@ -491,25 +398,21 @@ class PortfolioBacktester:
                 win_rate_str = "N/A"
             
             strategy_rows += f"| `{name}` | {config['weight']} | {pnl_str} | {trades_str} | {win_rate_str} |\n"
-
+        
+        # Perbaikan format Net Profit untuk nilai negatif
+        profit_color = "green" if kwargs['net_profit'] >= 0 else "red"
+        profit_sign = "+" if kwargs['net_profit'] >= 0 else ""
         results_table = (
             f"| Metrik            | Nilai                      |\n"
             f"| ----------------- | -------------------------- |\n"
             f"| Saldo Awal        | ${self.initial_balance:,.2f}                     |\n"
             f"| Saldo Akhir       | ${self.balance:,.2f}                     |\n"
-            f"| **Net Profit**    | **${kwargs['net_profit']:,.2f} ({kwargs['net_profit_pct']:+.2f}%)**       |\n"
+            f"| **Net Profit**    | **[{profit_color}]${kwargs['net_profit']:,.2f} ({profit_sign}{kwargs['net_profit_pct']:.2f}%)[/{profit_color}]**       |\n"
             f"| Total Trades      | {kwargs['total_trades']}                         |\n"
             f"| Win Rate          | {kwargs['win_rate']:.2f}%                     |\n"
             f"| Profit Factor     | {kwargs['profit_factor']:.2f}                       |\n"
             f"| Max Drawdown      | {kwargs['max_drawdown']:.2f}%                      |\n"
         )
-
-        # Perbaikan format Net Profit untuk nilai negatif
-        if kwargs['net_profit'] < 0:
-             results_table = results_table.replace(
-                f"**+${kwargs['net_profit']:,.2f} (+{kwargs['net_profit_pct']:.2f}%)**",
-                f"**${kwargs['net_profit']:,.2f} ({kwargs['net_profit_pct']:.2f}%)**"
-            )
 
         log_entry = (
             f"\n---\n\n"
@@ -532,3 +435,350 @@ class PortfolioBacktester:
         original_content = log_file_path.read_text() if log_file_path.exists() else ""
         log_file_path.write_text(log_entry + original_content)
         console.log(f"[green]✅ Results successfully appended to {log_file_path}[/green]")
+    
+    def check_limit_order_fill_realistic(self, symbol, order_details, candle, avg_volume):
+        """
+        FIXED: Probabilistic limit order fill model
+        More realistic than assuming 100% fill when price touches
+        """
+        limit_price = order_details['limit_price']
+        direction = order_details['direction']
+        
+        # Step 1: Did price reach our limit?
+        if direction == 'LONG':
+            price_touched = candle['low'] <= limit_price
+            if not price_touched:
+                return False, None
+            
+            # Step 2: How far did price move past our limit?
+            distance_past_limit = candle['close'] - limit_price
+            range_size = candle['high'] - candle['low']
+            
+        else:  # SHORT
+            price_touched = candle['high'] >= limit_price
+            if not price_touched:
+                return False, None
+            
+            distance_past_limit = limit_price - candle['close']
+            range_size = candle['high'] - candle['low']
+        
+        # Step 3: Calculate fill probability
+        # If close is far from limit, more likely we filled
+        if range_size > 0:
+            penetration_ratio = distance_past_limit / range_size
+            # Clamp between 0.4 and 1.0
+            base_probability = min(1.0, max(0.4, penetration_ratio))
+        else:
+            base_probability = 0.5
+        
+        # Step 4: Volume factor
+        # More volume = higher chance of fill
+        volume_factor = min(1.0, candle['volume'] / (avg_volume * 0.5))
+        fill_probability = base_probability * volume_factor
+        
+        # Step 5: Simulate the fill
+        filled = np.random.random() < fill_probability
+        
+        if filled:
+            # Calculate actual fill price (might be slightly better or worse than limit)
+            if direction == 'LONG':
+                # Sometimes get filled slightly above limit
+                actual_fill_price = limit_price * (1 + np.random.uniform(0, 0.0002))
+            else:
+                actual_fill_price = limit_price * (1 - np.random.uniform(0, 0.0002))
+            
+            return True, actual_fill_price
+        
+        return False, None
+    
+    def check_stop_loss_realistic(self, trade_details, candle, previous_candle):
+        """
+        FIXED: Use worst-case price within candle, not close
+        Also handles gaps and adds realistic slippage
+        """
+        direction = trade_details['direction']
+        sl_price = trade_details['sl_price']
+        
+        # Step 1: Check for gap (price jump between candles)
+        gap_occurred = False
+        if previous_candle is not None:
+            if direction == 'LONG':
+                # Gap down through SL
+                if candle['open'] < sl_price < previous_candle['close']:
+                    gap_occurred = True
+                    # Exit at open price (worst case)
+                    exit_price = candle['open']
+                    exit_reason = "Gap Stop Loss"
+                    return exit_price, exit_reason, True
+            else:  # SHORT
+                # Gap up through SL
+                if candle['open'] > sl_price > previous_candle['close']:
+                    gap_occurred = True
+                    exit_price = candle['open']
+                    exit_reason = "Gap Stop Loss"
+                    return exit_price, exit_reason, True
+        
+        # Step 2: Check if SL was hit during the candle
+        if direction == 'LONG':
+            if candle['low'] <= sl_price:
+                # Assume we got stopped at SL price + realistic slippage
+                # Slippage is worse during fast moves
+                atr = candle.get(f"ATRr_14", candle['high'] - candle['low'])
+                candle_range = candle['high'] - candle['low']
+                
+                # If candle is large (volatile), assume more slippage
+                volatility_factor = min(candle_range / atr, 2.0) if atr > 0 else 1.0
+                slippage_pct = SLIPPAGE['pct'] * volatility_factor
+                
+                exit_price = sl_price * (1 - slippage_pct)
+                exit_reason = "Stop Loss"
+                return exit_price, exit_reason, True
+                
+        else:  # SHORT
+            if candle['high'] >= sl_price:
+                atr = candle.get(f"ATRr_14", candle['high'] - candle['low'])
+                candle_range = candle['high'] - candle['low']
+                volatility_factor = min(candle_range / atr, 2.0) if atr > 0 else 1.0
+                slippage_pct = SLIPPAGE['pct'] * volatility_factor
+                
+                exit_price = sl_price * (1 + slippage_pct)
+                exit_reason = "Stop Loss"
+                return exit_price, exit_reason, True
+        
+        return None, None, False
+    
+    def update_trailing_stop(self, trade_details, candle):
+        """
+        MISSING FUNCTION - Now implemented!
+        Updates trailing stop loss based on price movement
+        """
+        if not LIVE_TRADING_CONFIG.get("trailing_sl_enabled", False):
+            return
+        
+        is_trailing_active = trade_details.get('trailing_sl_active', False)
+        direction = trade_details['direction']
+        
+        # Calculate current R-multiple
+        risk_distance = abs(trade_details['entry_price'] - trade_details['initial_sl'])
+        if risk_distance > 0:
+            current_profit_distance = abs(candle['close'] - trade_details['entry_price'])
+            current_rr = current_profit_distance / risk_distance
+            trigger_rr = LIVE_TRADING_CONFIG.get("trailing_sl_trigger_rr", 1.0)
+            
+            # Activate trailing if we've reached trigger RR
+            if not is_trailing_active and current_rr >= trigger_rr:
+                trade_details['trailing_sl_active'] = True
+                is_trailing_active = True
+        
+        # If trailing is active, update SL
+        if is_trailing_active:
+            atr_val = candle.get(f"ATRr_{CONFIG['atr_period']}", (candle['high'] - candle['low']))
+            trail_dist = atr_val * LIVE_TRADING_CONFIG.get("trailing_sl_distance_atr", 1.5)
+            
+            if direction == 'LONG':
+                # Use close price for trailing (your original logic)
+                new_sl = candle['close'] - trail_dist
+                # Only update if new SL is better (higher)
+                if new_sl > trade_details['sl_price']:
+                    trade_details['sl_price'] = new_sl
+            else:  # SHORT
+                new_sl = candle['close'] + trail_dist
+                # Only update if new SL is better (lower)
+                if new_sl < trade_details['sl_price']:
+                    trade_details['sl_price'] = new_sl
+    
+    def check_take_profit_realistic(self, trade_details, candle):
+        """
+        FIXED: Check if TP was hit using high/low, not just close
+        """
+        direction = trade_details['direction']
+        tp_price = trade_details['tp_price']
+        
+        if direction == 'LONG':
+            if candle['high'] >= tp_price:
+                # Assume we got filled at TP (limit order)
+                # But add small negative slippage for realism
+                exit_price = tp_price * (1 - SLIPPAGE['pct'] * 0.5)
+                return exit_price, "Take Profit", True
+        else:  # SHORT
+            if candle['low'] <= tp_price:
+                exit_price = tp_price * (1 + SLIPPAGE['pct'] * 0.5)
+                return exit_price, "Take Profit", True
+        
+        return None, None, False
+    
+    def check_circuit_breaker_realistic(self, trade_details, candle):
+        """
+        FIXED: Circuit breaker with realistic emergency exit slippage
+        """
+        from config import LIVE_TRADING_CONFIG
+        
+        if not LIVE_TRADING_CONFIG.get("circuit_breaker_enabled", True):
+            return None, None, False
+        
+        cb_multiplier = LIVE_TRADING_CONFIG.get("circuit_breaker_multiplier", 1.5)
+        sl_breach_threshold = abs(trade_details['entry_price'] - trade_details['initial_sl']) * (cb_multiplier - 1.0)
+        
+        direction = trade_details['direction']
+        sl_price = trade_details['sl_price']
+        
+        # Check if price breached the circuit breaker level
+        price_breached = False
+        
+        if direction == 'LONG' and candle['low'] < (sl_price - sl_breach_threshold):
+            price_breached = True
+            # Emergency exit - assume TERRIBLE fill due to panic
+            emergency_slippage = sl_breach_threshold * 0.3  # 30% of the breach distance
+            exit_price = sl_price - sl_breach_threshold - emergency_slippage
+            
+        elif direction == 'SHORT' and candle['high'] > (sl_price + sl_breach_threshold):
+            price_breached = True
+            emergency_slippage = sl_breach_threshold * 0.3
+            exit_price = sl_price + sl_breach_threshold + emergency_slippage
+        
+        if price_breached:
+            # Additional check: Volume confirmation (from your original code)
+            avg_volume = trade_details.get('avg_volume', candle['volume'])
+            volume_spike_multiplier = 2.0
+            
+            if candle['volume'] > (avg_volume * volume_spike_multiplier):
+                return exit_price, "Circuit Breaker", True
+        
+        return None, None, False
+    
+    def check_trades_and_orders_fixed(self, start_time, end_time, all_data):
+        """
+        FIXED VERSION: Check for exits and fills with realistic execution
+        """
+        # 1. Check Active Trades for Exit
+        closed_symbols = []
+        for symbol, trade_details in list(self.active_positions.items()):
+            full_data = all_data[symbol]
+            
+            check_start = max(start_time, trade_details['entry_time'])
+            if end_time <= check_start:
+                continue
+            
+            candles_to_check = full_data.loc[check_start:end_time].iloc[1:]
+            if candles_to_check.empty:
+                continue
+            
+            previous_candle = full_data.loc[:check_start].iloc[-1] if len(full_data.loc[:check_start]) > 0 else None
+            exit_reason = None
+            
+            for idx, candle in candles_to_check.iterrows():
+                # Priority 1: Check Circuit Breaker (most urgent)
+                exit_price, reason, triggered = self.check_circuit_breaker_realistic(trade_details, candle)
+                if triggered:
+                    exit_reason = reason
+                    break
+                
+                # Priority 2: Check Stop Loss
+                exit_price, reason, triggered = self.check_stop_loss_realistic(trade_details, candle, previous_candle)
+                if triggered:
+                    exit_reason = reason
+                    break
+                
+                # Priority 3: Check Take Profit (only if trailing not active)
+                if not trade_details.get('trailing_sl_active', False):
+                    exit_price, reason, triggered = self.check_take_profit_realistic(trade_details, candle)
+                    if triggered:
+                        exit_reason = reason
+                        break
+                
+                # Priority 4: Update Trailing Stop (if enabled)
+                if LIVE_TRADING_CONFIG.get("trailing_sl_enabled", False):
+                    self.update_trailing_stop(trade_details, candle)
+                
+                previous_candle = candle
+            
+            if exit_reason:
+                self.close_trade(symbol, exit_price, end_time, exit_reason)
+                closed_symbols.append(symbol)
+        
+        # 2. Check Pending Orders for Fill or Expiry
+        filled_symbols = []
+        expired_symbols = []
+        
+        for symbol, order_details in list(self.pending_orders.items()):
+            full_data = all_data[symbol]
+            
+            # Check expiration
+            if end_time > order_details['expiration_time']:
+                expired_symbols.append(symbol)
+                self.limit_order_stats['expired'] += 1
+                continue
+            
+            candles_to_check = full_data.loc[start_time:end_time].iloc[1:]
+            avg_volume = full_data['volume'].rolling(20).mean().loc[start_time:end_time].mean()
+            
+            for fill_time, candle in candles_to_check.iterrows():
+                self.limit_order_stats['attempted'] += 1
+                
+                # Use realistic fill model
+                filled, actual_fill_price = self.check_limit_order_fill_realistic(
+                    symbol, order_details, candle, avg_volume
+                )
+                
+                if filled:
+                    # Update order details with actual fill price
+                    order_details['actual_fill_price'] = actual_fill_price
+                    self.open_trade(symbol, order_details, fill_time)
+                    filled_symbols.append(symbol)
+                    self.limit_order_stats['filled'] += 1
+                    break
+        
+        # Clean up
+        for symbol in filled_symbols + expired_symbols:
+            if symbol in self.pending_orders:
+                del self.pending_orders[symbol]
+        
+        # Update fill rate statistics
+        if self.limit_order_stats['attempted'] > 0:
+            self.limit_order_stats['fill_rate'] = (
+                self.limit_order_stats['filled'] / self.limit_order_stats['attempted']
+            )
+    
+    def get_results_with_realism_report(self, args):
+        """
+        ENHANCED: Add statistics about backtest realism
+        """
+        # ... (your existing get_results code) ...
+        
+        # NEW: Add realism metrics to report
+        console.print("\n[bold cyan]Backtest Realism Metrics:[/bold cyan]")
+        realism_table = Table(show_header=True, header_style="bold yellow")
+        realism_table.add_column("Metric")
+        realism_table.add_column("Value", justify="right")
+        realism_table.add_column("Note")
+        
+        realism_table.add_row(
+            "Limit Order Fill Rate",
+            f"{self.limit_order_stats['fill_rate']*100:.1f}%",
+            "70-85% is realistic"
+        )
+        
+        # Calculate gap events
+        gap_stops = len([t for t in self.trades if t['Exit Reason'] == 'Gap Stop Loss'])
+        realism_table.add_row(
+            "Gap Stop Events",
+            str(gap_stops),
+            "Should see 1-5% of trades"
+        )
+        
+        # Calculate circuit breaker events
+        cb_stops = len([t for t in self.trades if t['Exit Reason'] == 'Circuit Breaker'])
+        realism_table.add_row(
+            "Circuit Breaker Events",
+            str(cb_stops),
+            "Should be rare (<2%)"
+        )
+        
+        console.print(realism_table)
+        
+        # Warning if backtest seems too optimistic
+        if self.limit_order_stats['fill_rate'] > 0.90:
+            console.print("\n[bold yellow]⚠️  WARNING: Fill rate >90% suggests backtest may be optimistic[/bold yellow]")
+        
+        if gap_stops == 0:
+            console.print("[bold yellow]⚠️  WARNING: No gap events detected. Consider longer backtest period.[/bold yellow]")

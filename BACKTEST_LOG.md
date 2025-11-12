@@ -1,6 +1,105 @@
 
 ---
 
+## Backtest: 2025-11-12 17:48:52
+
+**Parameter:**
+-   **Simbol:** Top 10 (berdasarkan volume)
+-   **Candles:** 1000
+-   **Periode:** ~4 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `ReversalMomentumRider(A4R)` | 1.0 | $-2.25 | 3 | 0.00% |
+| `UTBotScalper(G1)` | 1.5 | $-17.44 | 61 | 37.70% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $30.31                     |
+| **Net Profit**    | **[red]$-19.69 (-39.37%)[/red]**       |
+| Total Trades      | 64                         |
+| Win Rate          | 35.94%                     |
+| Profit Factor     | 0.31                       |
+| Max Drawdown      | 38.50%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-11-12 17:46:26
+
+**Parameter:**
+-   **Simbol:** Top 10 (berdasarkan volume)
+-   **Candles:** 1000
+-   **Periode:** ~1 Bulan 6 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `ReversalMomentumRider(A4R)` | 1.0 | $-2.38 | 3 | 0.00% |
+| `UTBotScalper(G1)` | 1.5 | $-20.26 | 64 | 34.38% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $27.36                     |
+| **Net Profit**    | **[red]$-22.64 (-45.28%)[/red]**       |
+| Total Trades      | 67                         |
+| Win Rate          | 32.84%                     |
+| Profit Factor     | 0.23                       |
+| Max Drawdown      | 45.15%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-11-12 10:10:08
+
+**Parameter:**
+-   **Simbol:** Top 10 (berdasarkan volume)
+-   **Candles:** 1000
+-   **Periode:** ~1 Bulan 5 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `ReversalMomentumRider(A4R)` | 1.0 | $-2.03 | 3 | 0.00% |
+| `UTBotScalper(G1)` | 1.5 | $-20.47 | 75 | 25.33% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $50.00                     |
+| Saldo Akhir       | $27.50                     |
+| **Net Profit**    | **[red]$-22.50 (-44.99%)[/red]**       |
+| Total Trades      | 78                         |
+| Win Rate          | 24.36%                     |
+| Profit Factor     | 0.28                       |
+| Max Drawdown      | 45.84%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
 ## Backtest: 2025-10-15 19:25:38
 
 **Parameter:**

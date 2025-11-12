@@ -146,6 +146,27 @@ The monitor can be run in a separate terminal window to watch the bot's activity
     python live_trader_monitor.py --env demo
     ```
 
+### Running the Backtesters
+
+The project includes powerful backtesting scripts to evaluate your strategies before deploying them.
+
+-   **Market Scanner (`backtest_market_scanner.py`)**:
+    This script runs a portfolio simulation across many symbols to see how your combined strategies perform in different market conditions.
+
+    ```bash
+    # Run with default settings (top 50 symbols, 1500 candles)
+    python backtest_market_scanner.py
+
+    # Run a deeper backtest on more symbols and a longer history
+    python backtest_market_scanner.py --max_symbols 100 --limit 10000
+    ```
+
+-   **Strategy Comparer (`backtest_strategy_comparation.py`)**:
+    This script tests each strategy individually against a portfolio of symbols and provides a comparative performance analysis.
+    ```bash
+    python backtest_strategy_comparation.py --max_symbols 20 --limit 1500
+    ```
+
 ## 🔧 Configuration
 
 Most of the bot's behavior can be tweaked in `config.py` and `strategies.py`.

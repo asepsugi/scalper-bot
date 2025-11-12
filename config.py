@@ -100,13 +100,13 @@ LIVE_TRADING_CONFIG = {
 
 # Biaya dan Slippage
 FEES = {
-  "maker": 0.0002,      # Biaya untuk limit order (fraksi)
-  "taker": 0.0005,      # REVISI: Biaya taker standar Binance Futures (0.05%)
+  "maker": 0.0003,      # Biaya untuk limit order (fraksi)
+  "taker": 0.0007,      # REVISI: Biaya taker standar Binance Futures (0.05%)
 }
 
 SLIPPAGE = {
   "fixed": 0.0,         # Slippage absolut dalam unit harga (misal: $0.5)
-  "pct": 0.0003         # Slippage sebagai fraksi dari harga (misal: 0.0003 = 0.03%)
+  "pct": 0.0008         # Slippage sebagai fraksi dari harga (misal: 0.0003 = 0.03%)
 }
 
 # Metadata Kontrak Futures
