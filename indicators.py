@@ -4,6 +4,10 @@ import ccxt
 from pathlib import Path
 import ccxt.pro as ccxtpro_base # Import ccxt.pro base class for type checking
 import pickle
+import sys  # <-- Tambahkan import ini
+import os   # <-- Tambahkan import ini
+import numpy as np # <-- Tambahkan import ini
+from scipy import stats # PERBAIKAN: Tambahkan import yang hilang untuk linear regression
 
 from config import CONFIG
 
@@ -128,130 +132,214 @@ def fetch_binance_data_sync(exchange, symbol, timeframe, limit, use_cache=True):
         print(f"Error fetching data from Binance for {symbol}: {e}")
         return None, False
 
-def get_trend(df, ema_period):
-    """Menentukan tren berdasarkan harga penutupan terhadap EMA."""
-    ema_col = f"EMA_{ema_period}"
-    latest_price = df['close'].iloc[-1]
-    latest_ema = df[ema_col].iloc[-1]
-    return "UPTREND" if latest_price > latest_ema else "DOWNTREND"
-
-def find_support_resistance(df, lookback):
-    """Mencari swing high dan low terdekat sebagai support/resistance."""
-    recent_data = df.iloc[-lookback:]
-    return recent_data['high'].max(), recent_data['low'].min()
-
-def calculate_fibonacci_extension(swing_high, swing_low, trend):
-    """Menghitung level Fibonacci Extension."""
-    diff = abs(swing_high - swing_low)
-    levels = {}
-    base = swing_high if trend == "UPTREND" else swing_low
-    multiplier = 1 if trend == "UPTREND" else -1
-
-    for level in CONFIG["fib_levels"]:
-        levels[level] = base + (diff * level * multiplier)
-    return list(levels.values())
-
-def is_bullish(candle):
-    """Memeriksa apakah candle bullish."""
-    return candle['close'] > candle['open']
-
-def is_bearish(candle):
-    """Memeriksa apakah candle bearish."""
-    return candle['close'] < candle['open']
-
-def body_strength(candle):
-    """Menghitung rasio body candle terhadap total range-nya."""
-    total_range = candle['high'] - candle['low']
-    if total_range == 0:
-        return 0
-    return abs(candle['close'] - candle['open']) / total_range
-
-def rsi_signal(df, rsi_period, oversold, overbought):
-    """Memberikan sinyal berdasarkan RSI crossover."""
-    rsi_col = f"RSI_{rsi_period}"
-    rsi_prev = df[rsi_col].iloc[-2]
-    rsi_curr = df[rsi_col].iloc[-1]
-    
-    if rsi_prev < oversold and rsi_curr > oversold:
-        return "LONG"
-    if rsi_prev > overbought and rsi_curr < overbought:
-        return "SHORT"
-    return "NONE"
-
-def stochastic_signal(df):
-    """Memberikan sinyal berdasarkan Stochastic crossover."""
-    k_prev = df['STOCHk_14_3_3'].iloc[-2]
-    d_prev = df['STOCHd_14_3_3'].iloc[-2]
-    k_curr = df['STOCHk_14_3_3'].iloc[-1]
-    d_curr = df['STOCHd_14_3_3'].iloc[-1]
-    
-    if k_prev < d_prev and k_curr > d_curr:
-        return "LONG"
-    if k_prev > d_prev and k_curr < d_curr:
-        return "SHORT"
-    return "NONE"
-
-def macd_slope(df):
-    """Memberikan sinyal berdasarkan slope dari MACD histogram."""
-    hist_prev = df['MACDh_12_26_9'].iloc[-2]
-    hist_curr = df['MACDh_12_26_9'].iloc[-1]
-    
-    if hist_curr > hist_prev:
-        return "LONG"
-    if hist_curr < hist_prev:
-        return "SHORT"
-    return "NONE"
-
-def atr_stoploss(entry, direction, df, atr_period, atr_mult):
-    """Menghitung Stop Loss menggunakan ATR."""
-    atr_col = f"ATRr_{atr_period}"
-    atr_val = df[atr_col].iloc[-1]
-    
-    if direction == "LONG":
-        return entry - (atr_val * atr_mult)
-    return entry + (atr_val * atr_mult)
-
-def breakout_check(candle, resistance, support, df, volume_lookback):
-    """Memeriksa sinyal breakout dengan konfirmasi volume."""
-    avg_volume = df['volume'].iloc[-volume_lookback-1:-1].mean()
-    
-    if candle['close'] > resistance and candle['volume'] > avg_volume:
-        return "BREAKOUT_LONG"
-    if candle['close'] < support and candle['volume'] > avg_volume:
-        return "BREAKOUT_SHORT"
-    return "NONE"
+# =============================================================================
+# ENHANCED INDICATOR CALCULATION
+# =============================================================================
 
 def calculate_indicators(df):
-    """Menghitung semua indikator teknikal yang dibutuhkan dan menambahkannya ke DataFrame."""
-    # Pastikan DataFrame tidak kosong untuk mencegah error pada pandas_ta
-    if df is None or df.empty:
-        return pd.DataFrame()
-
-    # --- REVISI: Sentralisasi semua perhitungan indikator dasar ---
-    df.ta.ema(length=CONFIG["ema_period"], append=True)
-    df.ta.ema(length=9, append=True) # Untuk strategi lain
-    df.ta.ema(length=200, append=True) # Untuk filter tren
-    df.ta.rsi(length=CONFIG["rsi_period"], append=True)
-    df.ta.stoch(append=True) # Menggunakan default pandas-ta (14, 3, 3)
-    df.ta.macd(append=True) # Menggunakan default pandas-ta (12, 26, 9)
-    df.ta.atr(length=CONFIG["atr_period"], append=True)
-    # REVISI: Gunakan periode dari config untuk ADX agar konsisten dengan strategi
-    df.ta.adx(length=CONFIG["atr_period"], append=True)
-    df.ta.vwap(append=True)
-
-    # --- FITUR BARU: Indikator untuk Strategi G1 (UT Bot / SuperTrend) ---
-    # Menggunakan parameter dari video: ATR Period=1, Multiplier=1.0
-    df.ta.supertrend(length=10, multiplier=3.0, append=True)
-
-    # --- PERBAIKAN FINAL: Kembalikan perhitungan Volume SMA ke sini ---
-    # Ini memastikan VOL_20 dihitung pada semua timeframe sejak awal.
-    df.ta.sma(close=df['volume'], length=CONFIG["volume_lookback"], prefix="VOL", append=True)
+    """
+    OPTIMIZED VERSION: Calculates all indicators needed for scalping.
     
-    # --- PERBAIKAN KRUSIAL: Ganti nama kolom default pandas_ta ---
-    # pandas_ta membuat kolom 'VOL_SMA_20', kita butuh 'VOL_20' agar konsisten.
-    default_vol_col = f"VOL_SMA_{CONFIG['volume_lookback']}"
-    target_vol_col = f"VOL_{CONFIG['volume_lookback']}"
-    if default_vol_col in df.columns:
-        df.rename(columns={default_vol_col: target_vol_col}, inplace=True)
+    Changes from original:
+    1. Fixed SuperTrend parameters (1,1) → (10,3.0) for 15m timeframe
+    2. Faster ATR (14 → 10) for more responsive stops
+    3. Added Bollinger Bands (critical for scalping)
+    4. Added Keltner Channels (better than BB in trends)
+    5. Added MFI (volume-weighted RSI)
+    6. Added Williams %R (faster momentum)
+    7. Added OBV (volume flow)
+    8. Added Donchian Channels (true high/low)
+    9. Removed Stochastic and MACD (unused)
+    10. Added custom indicators (ATR percentile, LR angle)
+    """
+    
+    if df is None or df.empty:
+        print("DEBUG: calculate_indicators received empty or None DataFrame.")
+        return pd.DataFrame()
+    # --- PERBAIKAN DEFINITIF: Bungkam semua output print dari blok ini ---
+    original_stdout = sys.stdout
+    sys.stdout = open(os.devnull, 'w')
+    try:
+        # =========================================================================
+        # TREND INDICATORS
+        # =========================================================================
+        df.ta.ema(length=9, append=True)
+        df.ta.ema(length=CONFIG["ema_period"], append=True)
+        df.ta.ema(length=200, append=True)
+        
+        # =========================================================================
+        # MOMENTUM INDICATORS
+        # =========================================================================
+        df.ta.rsi(length=CONFIG["rsi_period"], append=True)
+        df.ta.willr(length=14, append=True)
+        df.ta.mfi(length=14, append=True)
+        
+        # =========================================================================
+        # VOLATILITY INDICATORS
+        # =========================================================================
+        df.ta.atr(length=10, append=True)
+        
+        bbands = df.ta.bbands(length=20, std=2, append=True)
+        if bbands is not None and not bbands.empty:
+            rename_map = {f'{col}_2.0': col for col in ['BBL_20_2.0', 'BBM_20_2.0', 'BBU_20_2.0', 'BBB_20_2.0', 'BBP_20_2.0'] if f'{col}_2.0' in df.columns}
+            if rename_map:
+                df.rename(columns=rename_map, inplace=True)
 
+        if 'BBU_20_2.0' not in df.columns:
+            for col in ['BBL_20_2.0', 'BBM_20_2.0', 'BBU_20_2.0', 'BBB_20_2.0', 'BBP_20_2.0']:
+                if col not in df.columns: df[col] = np.nan
+        
+        df.ta.kc(length=20, scalar=2.0, append=True)
+        
+        # =========================================================================
+        # TREND STRENGTH
+        # =========================================================================
+        df.ta.adx(length=CONFIG["atr_period"], append=True)
+        df.ta.supertrend(length=10, multiplier=3.0, append=True)
+        
+        # =========================================================================
+        # VOLUME INDICATORS
+        # =========================================================================
+        df.ta.sma(close=df['volume'], length=CONFIG["volume_lookback"], prefix="VOL", append=True)
+        df.ta.obv(append=True)
+        
+        default_vol_col = f"VOL_SMA_{CONFIG['volume_lookback']}"
+        target_vol_col = f"VOL_{CONFIG['volume_lookback']}"
+        if default_vol_col in df.columns:
+            df.rename(columns={default_vol_col: target_vol_col}, inplace=True)
+        
+        # =========================================================================
+        # CHANNELS & VWAP
+        # =========================================================================
+        df.ta.donchian(length=20, append=True)
+        df.ta.vwap(append=True)
+
+    finally:
+        # --- PERBAIKAN DEFINITIF: Kembalikan output print ke normal ---
+        sys.stdout.close()
+        sys.stdout = original_stdout
+
+    # --- Kalkulasi indikator kustom dilakukan di luar blok yang dibungkam ---
+    # 1. ATR Percentile (for volatility regime detection)
+    atr_col = 'ATRr_10'
+    if atr_col in df.columns:
+        df['atr_percentile'] = df[atr_col].rolling(288).rank(pct=True)
+        df['atr_percentile'] = df['atr_percentile'].fillna(0.5)
+    
+    # 2. Linear Regression Angle (trend acceleration)
+    df = add_linear_regression_angle(df, period=14)
+    
+    # 3. Volume Ratio (for better volume analysis)
+    target_vol_col = f"VOL_{CONFIG['volume_lookback']}"
+    if target_vol_col in df.columns:
+        df['volume_ratio'] = df['volume'] / df[target_vol_col]
+        df['volume_ratio'] = df['volume_ratio'].fillna(1.0)
+    
+    # 4. Bollinger Band Width Percentile (squeeze detector)
+    if 'BBB_20_2.0' in df.columns:
+        df['bb_width_pct'] = df['BBB_20_2.0'].rolling(100).rank(pct=True)
+        df['bb_width_pct'] = df['bb_width_pct'].fillna(0.5)
+        df['bb_squeeze'] = df['bb_width_pct'] < 0.2
+    
+    # 5. Price position in Bollinger Bands (0-1 scale)
+    if all(col in df.columns for col in ['BBL_20_2.0', 'BBU_20_2.0']):
+        bb_range = df['BBU_20_2.0'] - df['BBL_20_2.0']
+        df['bb_position'] = (df['close'] - df['BBL_20_2.0']) / bb_range
+        df['bb_position'] = df['bb_position'].clip(0, 1).fillna(0.5)
+    
+    # 6. RSI Divergence Detection (simple version)
+    rsi_col_name = f"RSI_{CONFIG['rsi_period']}"
+    if rsi_col_name in df.columns:
+        price_hh = (df['close'] > df['close'].shift(10)) & (df['close'] > df['close'].rolling(10).max().shift(1))
+        rsi_lh = (df[rsi_col_name] < df[rsi_col_name].shift(10)) & (df[rsi_col_name] < df[rsi_col_name].rolling(10).max().shift(1))
+        df['rsi_bearish_div'] = price_hh & rsi_lh
+        
+        price_ll = (df['close'] < df['close'].shift(10)) & (df['close'] < df['close'].rolling(10).min().shift(1))
+        rsi_hl = (df[rsi_col_name] > df[rsi_col_name].shift(10)) & (df[rsi_col_name] > df[rsi_col_name].rolling(10).min().shift(1))
+        df['rsi_bullish_div'] = price_ll & rsi_hl
+    
+    # 7. MFI Divergence (similar to RSI)
+    if 'MFI_14' in df.columns:
+        price_hh = (df['close'] > df['close'].shift(10)) & (df['close'] > df['close'].rolling(10).max().shift(1))
+        mfi_lh = (df['MFI_14'] < df['MFI_14'].shift(10)) & (df['MFI_14'] < df['MFI_14'].rolling(10).max().shift(1))
+        df['mfi_bearish_div'] = price_hh & mfi_lh
+        
+        price_ll = (df['close'] < df['close'].shift(10)) & (df['close'] < df['close'].rolling(10).min().shift(1))
+        mfi_hl = (df['MFI_14'] > df['MFI_14'].shift(10)) & (df['MFI_14'] > df['MFI_14'].rolling(10).min().shift(1))
+        df['mfi_bullish_div'] = price_ll & mfi_hl
+    
     return df
+
+
+def add_linear_regression_angle(df, period=14):
+    """
+    Add linear regression angle as trend strength indicator.
+    
+    Angle interpretation:
+    - Positive angle: Uptrend (higher = stronger)
+    - Negative angle: Downtrend (lower = stronger)
+    - Near zero: Sideways/ranging
+    - Multiply by R² to weight by trend quality
+    """
+    def lr_angle(series):
+        if len(series) < 2:
+            return 0
+        
+        try:
+            x = np.arange(len(series))
+            slope, intercept, r_value, p_value, std_err = stats.linregress(x, series)
+            
+            # Convert slope to angle in degrees
+            angle_deg = np.degrees(np.arctan(slope))
+            
+            # Weight by R-squared (trend quality)
+            # R² close to 1 = strong linear trend
+            # R² close to 0 = noisy, not linear
+            weighted_angle = angle_deg * (r_value ** 2)
+            
+            return weighted_angle
+        except:
+            return 0
+    
+    df['LR_ANGLE'] = df['close'].rolling(period).apply(lr_angle, raw=False)
+    df['LR_ANGLE'] = df['LR_ANGLE'].fillna(0)
+    
+    # Add trend classification based on angle
+    df['lr_trend'] = 'NEUTRAL'
+    df.loc[df['LR_ANGLE'] > 15, 'lr_trend'] = 'STRONG_UP'
+    df.loc[df['LR_ANGLE'] > 5, 'lr_trend'] = 'UP'
+    df.loc[df['LR_ANGLE'] < -15, 'lr_trend'] = 'STRONG_DOWN'
+    df.loc[df['LR_ANGLE'] < -5, 'lr_trend'] = 'DOWN'
+    
+    return df
+
+# =============================================================================
+# INDICATOR SUMMARY FUNCTION (For Debugging)
+# =============================================================================
+
+def print_indicator_summary(df):
+    """Prints summary of available indicators in DataFrame."""
+    from rich.console import Console
+    from rich.table import Table
+    
+    console = Console()
+    
+    table = Table(title="Available Indicators", show_header=True)
+    table.add_column("Category", style="cyan")
+    table.add_column("Indicators", style="white")
+    
+    indicators = {
+        "Trend": [col for col in df.columns if any(x in col for x in ['EMA', 'SUPER', 'LR'])],
+        "Momentum": [col for col in df.columns if any(x in col for x in ['RSI', 'MFI', 'WILLR', 'div'])],
+        "Volatility": [col for col in df.columns if any(x in col for x in ['ATR', 'BB', 'KC'])],
+        "Volume": [col for col in df.columns if any(x in col for x in ['VOL', 'OBV'])],
+        "Channels": [col for col in df.columns if any(x in col for x in ['DC'])],
+        "Custom": [col for col in df.columns if any(x in col for x in ['percentile', 'ratio', 'position', 'squeeze'])]
+    }
+    
+    for category, cols in indicators.items():
+        if cols:
+            table.add_row(category, ", ".join(cols[:5]) + ("..." if len(cols) > 5 else ""))
+    
+    console.print(table)
+    console.print(f"\nTotal indicators: {len(df.columns) - 6}")  # Exclude OHLCV + timestamp

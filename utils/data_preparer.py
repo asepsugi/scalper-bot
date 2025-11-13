@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import sys
 from .smc_utils import analyze_smc_on_trend_tf # Impor fungsi analisis SMC
+from indicators import calculate_indicators # REVISI: Impor fungsi kalkulator
 
 def prepare_data(df_signal, df_trend_15m, df_trend_1h):
     """
@@ -14,15 +15,18 @@ def prepare_data(df_signal, df_trend_15m, df_trend_1h):
 
     # --- PERBAIKAN: Impor CONFIG di dalam fungsi untuk menghindari circular import ---
     from config import CONFIG
+    
+    # --- REVISI ALUR LOGIKA UNTUK MENGHILANGKAN WARNING ---
+    # 1. Hitung indikator pada setiap DataFrame secara terpisah TERLEBIH DAHULU.
+    # Ini memastikan semua kolom sumber ('RSI_14', 'EMA_50', dll.) ada sebelum digabungkan.
+    df_signal = calculate_indicators(df_signal.copy())
+    df_trend_15m = calculate_indicators(df_trend_15m.copy())
+    df_trend_1h = calculate_indicators(df_trend_1h.copy())
 
-    print("Preparing base data with all indicators...")
-
-    # --- LANGKAH 2 (PERBAIKAN DEFINITIF): Jadikan df_signal sebagai basis utama ---
-    # Buat salinan untuk memastikan DataFrame asli tidak termodifikasi.
-    # Ini secara otomatis membawa SEMUA kolom dari df_signal, termasuk VOL_20 dan indikator lainnya.
+    # 2. Jadikan df_signal yang sudah diproses sebagai basis utama.
     base_df = df_signal.copy()
-
-    # --- LANGKAH 3: Gabungkan indikator dari timeframe yang lebih tinggi ---
+    
+    # 3. Gabungkan indikator dari timeframe yang lebih tinggi (sekarang kolomnya pasti ada).
     # Daftar indikator yang akan digabungkan dan nama kolom barunya
     mta_indicators = {
         '15m': {
@@ -32,7 +36,7 @@ def prepare_data(df_signal, df_trend_15m, df_trend_1h):
         },
         '1h': {
             f"RSI_{CONFIG['rsi_period']}": 'rsi_1h',
-            'MACDh_12_26_9': 'MACDh_1h'
+            # REVISI: Hapus MACD karena tidak lagi dihitung di indicators.py dan tidak digunakan oleh strategi.
         }
     }
 
@@ -112,5 +116,4 @@ def prepare_data(df_signal, df_trend_15m, df_trend_1h):
     base_df.bfill(inplace=True)
     base_df.ffill(inplace=True)
 
-    print("✅ Data preparation complete. All required columns are present.")
     return base_df

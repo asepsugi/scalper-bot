@@ -85,14 +85,21 @@ def run_scan(backtester, symbols, limit):
     all_timestamps = sorted(list(set(s['timestamp'] for s in sorted_signals)))
     console.log(f"Starting chronological simulation across {len(all_timestamps)} unique signal timestamps...")
 
-    for i in range(len(all_timestamps) - 1):
+    # --- PERBAIKAN KRUSIAL: Ubah urutan logika loop ---
+    # Kita harus memproses sinyal PADA current_time, LALU memeriksa apa yang terjadi
+    # di antara current_time dan next_time.
+    for i in range(len(all_timestamps)):
         current_time = all_timestamps[i]
-        next_time = all_timestamps[i+1]
-        # REVISI: Gunakan fungsi backtest yang lebih realistis
-        # backtester.check_trades_and_orders(current_time, next_time, all_data)
+        # Proses semua sinyal yang terjadi pada timestamp ini TERLEBIH DAHULU
+        signals_at_this_time = [s for s in sorted_signals if s['timestamp'] == current_time]
+        for signal in signals_at_this_time:
+            backtester.process_new_signal(signal, all_data)
+
+        # SEKARANG, jalankan simulasi dari current_time ke next_time
+        # Ini akan memeriksa order yang BARU SAJA dibuat.
+        next_time = all_timestamps[i+1] if i + 1 < len(all_timestamps) else None
+        if not next_time: continue # Jangan proses iterasi terakhir
         backtester.check_trades_and_orders_fixed(current_time, next_time, all_data)
-        if current_time in signals_by_time:
-            backtester.process_new_signal(signals_by_time[current_time], all_data)
 
     backtester.close_remaining_trades(all_data)
 

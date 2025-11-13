@@ -10,6 +10,7 @@ kondisi boolean untuk sinyal LONG dan SHORT.
 """
 
 def signal_version_A3(df):
+    # print(f"DEBUG: Columns in DataFrame for signal_version_A3: {df.columns.tolist()}") # Uncomment for detailed debugging
     """Simplified MTA RSI: 15m RSI cross is the trigger, 1H RSI is a bias."""
     """
     IMPROVED VERSION of A3 - Your historically best performer.
@@ -38,8 +39,25 @@ def signal_version_A3(df):
     # NEW: Don't enter if price just moved too far (overextended)
     not_overextended = abs(df['close'].pct_change(3)) < 0.008  # <0.8% move in 3 candles
 
-    long_signal = base_long & volume_filter & adx_filter & not_overextended
-    short_signal = base_short & volume_filter & adx_filter & not_overextended
+    # NEW: Add BB confirmation
+    # Defensive check for BBU_20_2.0
+    if 'BBU_20_2.0' in df.columns:
+        not_overbought_bb = df['close'] < df['BBU_20_2.0']
+    else:
+        print("WARNING: BBU_20_2.0 not found in DataFrame for A3. Skipping BB filter.")
+        not_overbought_bb = pd.Series(True, index=df.index) # Assume not overbought if filter missing
+    
+    # NEW: Add MFI confirmation
+    if 'MFI_14' in df.columns:
+        mfi_confirming = df['MFI_14'] > 50
+    else:
+        print("WARNING: MFI_14 not found in DataFrame for A3. Skipping MFI filter.")
+        mfi_confirming = pd.Series(True, index=df.index) # Assume MFI is confirming if filter missing
+    long_signal = base_long & not_overbought_bb & mfi_confirming
+    short_signal = base_short & not_overbought_bb & mfi_confirming
+
+    # long_signal = base_long & volume_filter & adx_filter & not_overextended
+    # short_signal = base_short & volume_filter & adx_filter & not_overextended
 
     return long_signal, short_signal, exit_params
 

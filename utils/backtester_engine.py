@@ -4,7 +4,7 @@ from rich.console import Console
 from datetime import datetime
 from pathlib import Path
 
-from config import CONFIG, FEES, SLIPPAGE, LEVERAGE_MAP, LIVE_TRADING_CONFIG
+from config import CONFIG, FEES, SLIPPAGE, LEVERAGE_MAP, LIVE_TRADING_CONFIG, BACKTEST_REALISM_CONFIG
 from utils.common_utils import get_dynamic_risk_params
 from indicators import fetch_binance_data_sync, calculate_indicators
 from utils.data_preparer import prepare_data
@@ -58,10 +58,8 @@ class PortfolioBacktester:
         if any(df is None for df in [df_signal, df_trend, df_macro]):
             return None, False
 
-        df_signal = calculate_indicators(df_signal)
-        df_trend = calculate_indicators(df_trend)
-        df_macro = calculate_indicators(df_macro)
-        base_data = prepare_data(df_signal, df_trend, df_macro)
+        # REVISI: Pindahkan kalkulasi indikator ke dalam prepare_data untuk memastikan semua dihitung pada DataFrame akhir.
+        base_data = prepare_data(df_signal, df_trend, df_macro) # type: ignore
         was_api_call = not (from_cache_signal and from_cache_trend and from_cache_macro)
         return base_data, not was_api_call
 
@@ -467,13 +465,15 @@ class PortfolioBacktester:
         if range_size > 0:
             penetration_ratio = distance_past_limit / range_size
             # Clamp between 0.4 and 1.0
-            base_probability = min(1.0, max(0.4, penetration_ratio))
+            min_prob = BACKTEST_REALISM_CONFIG.get("min_fill_probability", 0.4)
+            base_probability = min(1.0, max(min_prob, penetration_ratio))
         else:
             base_probability = 0.5
         
         # Step 4: Volume factor
         # More volume = higher chance of fill
-        volume_factor = min(1.0, candle['volume'] / (avg_volume * 0.5))
+        vol_multiplier = BACKTEST_REALISM_CONFIG.get("volume_factor_multiplier", 0.5)
+        volume_factor = min(1.0, candle['volume'] / (avg_volume * vol_multiplier)) if avg_volume > 0 else 1.0
         fill_probability = base_probability * volume_factor
         
         # Step 5: Simulate the fill
@@ -659,7 +659,10 @@ class PortfolioBacktester:
             if end_time <= check_start:
                 continue
             
-            candles_to_check = full_data.loc[check_start:end_time].iloc[1:]
+            # PERBAIKAN: Jangan gunakan .iloc[1:]. Slicing loc sudah inklusif untuk start dan end.
+            # Kita ingin memeriksa SEMUA candle di antara dua timestamp sinyal, dimulai dari
+            # candle SETELAH sinyal dibuat. `check_start` sudah menangani ini.
+            candles_to_check = full_data.loc[check_start:end_time]
             if candles_to_check.empty:
                 continue
             
@@ -709,7 +712,10 @@ class PortfolioBacktester:
                 self.limit_order_stats['expired'] += 1
                 continue
             
-            candles_to_check = full_data.loc[start_time:end_time].iloc[1:]
+            # PERBAIKAN: Gunakan slicing yang sama dengan di atas.
+            # Kita periksa semua candle dari waktu sinyal dibuat hingga sinyal berikutnya.
+            check_start_order = max(start_time, order_details['creation_time'])
+            candles_to_check = full_data.loc[check_start_order:end_time]
             avg_volume = full_data['volume'].rolling(20).mean().loc[start_time:end_time].mean()
             
             for fill_time, candle in candles_to_check.iterrows():

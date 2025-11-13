@@ -84,12 +84,9 @@ if __name__ == "__main__":
             console.log(f"[yellow]Skipping {symbol} due to data fetching issues.[/yellow]")
             continue
 
-        # 2. Prepare data
-        df_signal = calculate_indicators(df_signal)
-        df_trend = calculate_indicators(df_trend) # type: ignore
-        df_macro = calculate_indicators(df_macro) # type: ignore
-        
-        prepared_data = prepare_data(df_signal, df_trend, df_macro) # type: ignore
+        # REVISI: Selaraskan dengan market_scanner. Langsung panggil prepare_data.
+        # Kalkulasi indikator sekarang sepenuhnya ditangani di dalam prepare_data.
+        prepared_data = prepare_data(df_signal, df_trend, df_macro)
         if prepared_data is None:
             console.log(f"[yellow]Skipping {symbol} due to data preparation issues.[/yellow]")
             continue

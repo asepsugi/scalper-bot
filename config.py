@@ -123,6 +123,14 @@ LIVE_TRADING_CONFIG = {
     "max_position_scale": 1.5
 }
 
+# ============================================================================
+# NEW: BACKTEST REALISM CONFIG
+# ============================================================================
+BACKTEST_REALISM_CONFIG = {
+    "min_fill_probability": 0.75,  # Peluang terisi minimal jika harga hanya menyentuh limit
+    "volume_factor_multiplier": 0.2 # Seberapa besar pengaruh volume (lebih kecil = pengaruh lebih besar)
+}
+
 # Biaya dan Slippage
 FEES = {
   "maker": 0.0002,      # Biaya untuk limit order (fraksi)
@@ -160,16 +168,16 @@ EXECUTION = {
 # Gunakan 'DEFAULT' untuk semua simbol lain yang tidak terdaftar.
 LEVERAGE_MAP = {
     # High volatility coins - Lower leverage
-    "1000PEPE/USDT": 5,
-    "1000SHIB/USDT": 5,
-    "DOGE/USDT": 8,
+    # "1000PEPE/USDT": 5,
+    # "1000SHIB/USDT": 5,
+    # "DOGE/USDT": 8,
     
     # Stable coins - Moderate leverage
-    "BTC/USDT": 10,  # DOWN from 20
-    "ETH/USDT": 10,  # DOWN from 20
+    "BTC/USDT": 50,  # DOWN from 20
+    "ETH/USDT": 50,  # DOWN from 20
     
     # DEFAULT - Conservative
-    "DEFAULT": 8  # DOWN from 20 (much safer)
+    "DEFAULT": 25  # DOWN from 20 (much safer)
 }
 
 # ============================================================================
