@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from rich.console import Console
 from datetime import datetime
+import time
 from pathlib import Path
 
 from config import CONFIG, FEES, SLIPPAGE, LEVERAGE_MAP, LIVE_TRADING_CONFIG, BACKTEST_REALISM_CONFIG, EXECUTION
@@ -74,9 +75,9 @@ class PortfolioBacktester:
         signal_time = pd.to_datetime(signal['timestamp'], utc=True)
 
         # --- FITUR BARU: Filter Cooldown ---
-        cooldown_minutes = LIVE_TRADING_CONFIG.get('trade_cooldown_minutes', 60)
+        cooldown_seconds = LIVE_TRADING_CONFIG.get('trade_cooldown_seconds', 120)
         last_trade_t = self.last_trade_time.get(symbol)
-        if last_trade_t and (signal_time - last_trade_t) < pd.Timedelta(minutes=cooldown_minutes):
+        if last_trade_t and (signal_time - last_trade_t) < pd.Timedelta(seconds=cooldown_seconds):
             # console.log(f"[grey50]Skipping signal for {symbol}: Cooldown period active.[/grey50]")
             return
         # --- Akhir Filter Cooldown ---
@@ -84,11 +85,22 @@ class PortfolioBacktester:
         if symbol in self.active_positions or symbol in self.pending_orders:
             return
 
+        # Filter Baru: Batas trade harian
+        today_str = signal_time.strftime('%Y-%m-%d')
+        trades_today = len([t for t in self.trades if t['Exit Time'].strftime('%Y-%m-%d') == today_str])
+        if trades_today >= LIVE_TRADING_CONFIG.get('max_trades_per_day', 999):
+            # console.log(f"[grey50]Skipping signal for {symbol}: Daily trade limit reached.[/grey50]")
+            return
+
         full_data = all_data[symbol]
         try:
             signal_row = full_data.loc[signal_time]
         except KeyError:
             return
+        
+        # Execution Realism di Backtester: Sim latency
+        latency_seconds = np.random.uniform(0.1, 0.5)
+        time.sleep(latency_seconds)
         
         signal_row_dict = signal_row.to_dict()
         signal_row_dict['signal'] = signal['signal']
@@ -98,8 +110,16 @@ class PortfolioBacktester:
         signal_function = STRATEGY_CONFIG[strategy_name]['function']
         _, _, exit_params = signal_function(full_data)
 
+        # Risk & Cooldown Enhance: Turunkan risk di loss streak
         risk_params = get_dynamic_risk_params(self.balance)
         current_risk_per_trade = risk_params['risk_per_trade']
+        if LIVE_TRADING_CONFIG.get('scale_down_on_loss_streak', False):
+            loss_streak = 0
+            for trade in reversed(self.trades):
+                if trade['PnL (USD)'] < 0:
+                    loss_streak += 1
+                else: break
+            if loss_streak >= 2: current_risk_per_trade = 0.002
         default_leverage = risk_params['default_leverage']
 
         self.create_pending_order(signal_row_dict, signal_time, full_data, exit_params, symbol, current_risk_per_trade, default_leverage)
@@ -265,6 +285,13 @@ class PortfolioBacktester:
         drawdown_pct = (self.peak_balance - self.balance) / self.peak_balance if self.peak_balance > 0 else 0
         if drawdown_pct > LIVE_TRADING_CONFIG['max_drawdown_pct']:
             if self.drawdown_cooldown_until is None or current_time > self.drawdown_cooldown_until:
+                # Enforce max_daily_loss_pct
+                daily_pnl_pct = self.get_daily_pnl_pct(current_time)
+                if daily_pnl_pct < -LIVE_TRADING_CONFIG.get('max_daily_loss_pct', 0.05):
+                    console.log(f"🚨 [bold red]MAX DAILY LOSS REACHED![/bold red] PnL Hari Ini: {daily_pnl_pct:.2%}. Trading dihentikan untuk hari ini.")
+                    # Set cooldown until next day
+                    self.drawdown_cooldown_until = (current_time + pd.Timedelta(days=1)).replace(hour=0, minute=0, second=0)
+                    return True
                 cooldown_hours = LIVE_TRADING_CONFIG['drawdown_cooldown_hours']
                 self.drawdown_cooldown_until = current_time + pd.Timedelta(hours=cooldown_hours)
                 console.log(f"🚨 [bold red]DRAWDOWN CIRCUIT BREAKER TERPICU![/bold red] Drawdown: {drawdown_pct:.2%}. Trading dihentikan selama {cooldown_hours} jam.")
@@ -296,6 +323,15 @@ class PortfolioBacktester:
                 "sharpe_ratio": 0, "avg_trade_duration": 0,
                 "final_balance": self.initial_balance
             }
+
+    def get_daily_pnl_pct(self, current_time):
+        """Helper to calculate PnL for the current day."""
+        if not self.trades: return 0.0
+        trades_df = pd.DataFrame(self.trades)
+        trades_df['Exit Time'] = pd.to_datetime(trades_df['Exit Time'])
+        today_trades = trades_df[trades_df['Exit Time'].dt.date == current_time.date()]
+        if today_trades.empty: return 0.0
+        return today_trades['PnL (USD)'].sum() / self.initial_balance
 
         trades_df = pd.DataFrame(self.trades)
         net_profit_pct = ((self.balance - self.initial_balance) / self.initial_balance) * 100
@@ -494,54 +530,34 @@ class PortfolioBacktester:
         limit_price = order_details['limit_price']
         direction = order_details['direction']
         
-        # Step 1: Did price reach our limit?
-        if direction == 'LONG':
-            price_touched = candle['low'] <= limit_price
-            if not price_touched:
-                return False, None
-            
-            # Step 2: How far did price move past our limit?
-            distance_past_limit = candle['close'] - limit_price
-            range_size = candle['high'] - candle['low']
-            
-        else:  # SHORT
-            price_touched = candle['high'] >= limit_price
-            if not price_touched:
-                return False, None
-            
-            distance_past_limit = limit_price - candle['close']
-            range_size = candle['high'] - candle['low']
+        # Execution Realism di Backtester
+        price_touched = (direction == 'LONG' and candle['low'] <= limit_price) or \
+                        (direction == 'SHORT' and candle['high'] >= limit_price)
+        if not price_touched:
+            return False, None, 1.0
+
+        # Calculate fill probability
+        min_prob = BACKTEST_REALISM_CONFIG.get("min_fill_probability", 0.75)
+        vol_factor_mult = BACKTEST_REALISM_CONFIG.get("volume_factor_multiplier", 0.2)
         
-        # Step 3: Calculate fill probability
-        # If close is far from limit, more likely we filled
-        if range_size > 0:
-            penetration_ratio = distance_past_limit / range_size
-            # Clamp between 0.4 and 1.0
-            min_prob = BACKTEST_REALISM_CONFIG.get("min_fill_probability", 0.4)
-            base_probability = min(1.0, max(min_prob, penetration_ratio))
-        else:
-            base_probability = 0.5
+        volume_factor = vol_factor_mult * (candle['volume'] / avg_volume - 1) if avg_volume > 0 else 0
+        fill_probability = min_prob + volume_factor
         
-        # Step 4: Volume factor
-        # More volume = higher chance of fill
-        vol_multiplier = BACKTEST_REALISM_CONFIG.get("volume_factor_multiplier", 0.5)
-        volume_factor = min(1.0, candle['volume'] / (avg_volume * vol_multiplier)) if avg_volume > 0 else 1.0
-        fill_probability = base_probability * volume_factor
-        
-        # Step 5: Simulate the fill
         filled = np.random.random() < fill_probability
         
         if filled:
-            # Calculate actual fill price (might be slightly better or worse than limit)
+            # Calculate partial fill fraction
+            partial_fill_fraction = min(1.0, (candle['volume'] / avg_volume) * 2) if avg_volume > 0 else 1.0
+            
+            # Calculate actual fill price
             if direction == 'LONG':
-                # Sometimes get filled slightly above limit
                 actual_fill_price = limit_price * (1 + np.random.uniform(0, 0.0002))
             else:
                 actual_fill_price = limit_price * (1 - np.random.uniform(0, 0.0002))
             
-            return True, actual_fill_price
+            return True, actual_fill_price, partial_fill_fraction
         
-        return False, None
+        return False, None, 1.0
     
     def check_stop_loss_realistic(self, trade_details, candle, previous_candle):
         """
@@ -604,7 +620,7 @@ class PortfolioBacktester:
         MISSING FUNCTION - Now implemented!
         Updates trailing stop loss based on price movement
         """
-        if not LIVE_TRADING_CONFIG.get("trailing_sl_enabled", False):
+        if not EXECUTION.get("trailing", {}).get("enabled", False):
             return
         
         is_trailing_active = trade_details.get('trailing_sl_active', False)
@@ -615,7 +631,7 @@ class PortfolioBacktester:
         if risk_distance > 0:
             current_profit_distance = abs(candle['close'] - trade_details['entry_price'])
             current_rr = current_profit_distance / risk_distance
-            trigger_rr = LIVE_TRADING_CONFIG.get("trailing_sl_trigger_rr", 1.0)
+            trigger_rr = EXECUTION.get("trailing", {}).get("trigger_rr", 1.0)
             
             # Activate trailing if we've reached trigger RR
             if not is_trailing_active and current_rr >= trigger_rr:
@@ -625,7 +641,7 @@ class PortfolioBacktester:
         # If trailing is active, update SL
         if is_trailing_active:
             atr_val = candle.get(f"ATRr_{CONFIG['atr_period']}", (candle['high'] - candle['low']))
-            trail_dist = atr_val * LIVE_TRADING_CONFIG.get("trailing_sl_distance_atr", 1.5)
+            trail_dist = atr_val * EXECUTION.get("trailing", {}).get("distance_atr", 1.5)
             
             if direction == 'LONG':
                 # Use close price for trailing (your original logic)
@@ -790,14 +806,17 @@ class PortfolioBacktester:
                 self.limit_order_stats['attempted'] += 1
                 
                 # Use realistic fill model
-                filled, actual_fill_price = self.check_limit_order_fill_realistic(
+                filled, actual_fill_price, partial_fill_fraction = self.check_limit_order_fill_realistic(
                     symbol, order_details, candle, avg_volume
                 )
                 
                 if filled:
                     # Update order details with actual fill price
                     order_details['actual_fill_price'] = actual_fill_price
+                    # Adjust position size for partial fill
+                    order_details['position_size_usd'] *= partial_fill_fraction
                     self.open_trade(symbol, order_details, fill_time)
+
                     filled_symbols.append(symbol)
                     self.limit_order_stats['filled'] += 1
                     break

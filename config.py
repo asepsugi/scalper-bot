@@ -14,7 +14,7 @@ load_dotenv()
 CONFIG = {
     "timeframe_trend": "15m",
     "timeframe_signal": "5m",
-    
+
     # CRITICAL FIX: Your risk was too high for a scalper
     "risk_per_trade": 0.002,  # DOWN from 0.005 (0.3% instead of 0.5%)
     
@@ -89,30 +89,25 @@ CONFIG = {
 }
 
 LIVE_TRADING_CONFIG = {
-    "max_symbols_to_trade": 30,  # DOWN from 50 (less is more focused)
+    "max_symbols_to_trade": 20,  # DOWN from 30 (Symbol & Data Focus)
     
     # CRITICAL FIX: Match the per-trade risk
-    "risk_per_trade": 0.003,  # DOWN from 0.005
+    "risk_per_trade": 0.002,  # DOWN from 0.003 (Risk & Cooldown Enhance)
     
     "max_margin_usage_pct": 0.60,  # DOWN from 0.80 (more conservative)
     
     # CRITICAL FIX: Require stronger consensus
-    "consensus_ratio": 0.55,  # UP from 0.55 (fewer but better signals)
+    "consensus_ratio": 0.65,  # DOWN from 0.75 (Longgarkan untuk lebih banyak trade)
     
     # Circuit breaker - Tightened
     "circuit_breaker_multiplier": 1.3,  # DOWN from 1.5 (exit sooner)
     
-    # Trailing stop - More aggressive
-    "trailing_sl_enabled": True,
-    "trailing_sl_trigger_rr": 1.2,  # SARAN: Mulai trailing setelah profit > 1R, misal 1.2R
-    "trailing_sl_distance_atr": 1.0,  # DOWN from 1.5 (tighter trail)
-    "trailing_sl_check_interval": 2,  # More frequent checks
-    
     # CRITICAL: Keep advanced exit logic ON
+    # Logika exit canggih (termasuk trailing stop) sekarang dikontrol oleh blok EXECUTION
     "use_advanced_exit_logic": True,
     
-    # NEW: Prevent revenge trading
-    "trade_cooldown_minutes": 30,  # NEW: Wait 30min after loss on same symbol
+    # NEW: Prevent revenge trading (dipercepat)
+    "trade_cooldown_seconds": 120, # DOWN from 45min (2700s)
     
     # NEW: Daily loss limit (stop trading for the day)
     "max_daily_loss_pct": 0.05,  # Stop at -5% daily loss
@@ -124,7 +119,10 @@ LIVE_TRADING_CONFIG = {
     # NEW: Position sizing adjustments
     "scale_down_on_loss_streak": True,  # Reduce size after 2 losses
     "scale_up_on_win_streak": True,     # Increase after 3 wins (max 1.5x)
-    "max_position_scale": 1.5
+    "max_position_scale": 1.5,
+
+    # NEW: Daily trade limit
+    "max_trades_per_day": 12 # Batasi jumlah trade per hari
 }
 
 # ============================================================================
@@ -155,6 +153,7 @@ CONTRACT = {
 
 # Konfigurasi Eksekusi (Partial TP & Trailing Stop)
 EXECUTION = {
+    # Strategi Take Profit Parsial
     "partial_tps": [
         # (rr_multiplier, position_fraction_to_close)
         (1.5, 0.5), # Tutup 50% posisi pada 1.5 RR
@@ -163,8 +162,9 @@ EXECUTION = {
     ],
     "trailing": {
         "enabled": True,
-        "trigger_rr": 2.6,    # Mulai trailing setelah TP2 tercapai (misal: 2.6 RR)
-        "trail_dist_rr": 0.5, # Jarak trailing stop adalah 0.5x RR dari harga saat ini
+        "trigger_rr": 2.6,      # Mulai trailing setelah TP2 tercapai (misal: 2.6 RR)
+        "distance_atr": 1.0,        # Jarak trailing stop dari harga (dalam kelipatan ATR)
+        "check_interval_seconds": 2 # Seberapa sering memeriksa untuk update trailing SL
     }
 }
 
@@ -172,17 +172,13 @@ EXECUTION = {
 # Tentukan leverage spesifik untuk simbol tertentu.
 # Gunakan 'DEFAULT' untuk semua simbol lain yang tidak terdaftar.
 LEVERAGE_MAP = {
-    # High volatility coins - Lower leverage
-    # "1000PEPE/USDT": 5,
-    # "1000SHIB/USDT": 5,
-    # "DOGE/USDT": 8,
     
     # Stable coins - Moderate leverage
-    "BTC/USDT": 5,  # DOWN from 20
-    "ETH/USDT": 5,  # DOWN from 20
+    "BTC/USDT": 15,
+    "ETH/USDT": 15,
     
     # DEFAULT - Conservative
-    "DEFAULT": 5  # DOWN from 20 (much safer)
+    "DEFAULT": 15  # Capped at 15x (Risk & Cooldown Enhance)
 }
 
 # ============================================================================

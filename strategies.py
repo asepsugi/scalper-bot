@@ -29,8 +29,12 @@ def signal_version_A3(df):
     
     Expected: 40-60 trades (up from 15) with 65-70% WR
     """
+    # Dynamic SL/TP: SL multiplier dinamis berdasarkan volatilitas
+    # atr_percentile (0-1) dipetakan ke SL multiplier (1.0-1.3)
+    dynamic_sl_multiplier = 1.0 + (df.get('atr_percentile', 0.5) * 0.3)
+
     exit_params = {
-        'sl_multiplier': 1.2,
+        'sl_multiplier': dynamic_sl_multiplier,
         'rr_ratio': 1.8
     }
 
@@ -38,17 +42,21 @@ def signal_version_A3(df):
     base_long = (df['trend'] == 'UPTREND') & \
                 (df['rsi_15m'].shift(1) < 50) & \
                 (df['rsi_15m'] > 50)
-    
     base_short = (df['trend'] == 'DOWNTREND') & \
                  (df['rsi_15m'].shift(1) > 50) & \
                  (df['rsi_15m'] < 50)
 
-    # Essential filters only (reduced from 7 to 2)
-    volume_filter = df['volume'] > (df['VOL_20'] * 0.7)  # LOWERED from 0.8
-    adx_filter = df[f"ADX_{CONFIG['atr_period']}"] > 18  # LOWERED from 20
+    # Filters yang dilonggarkan
+    volume_filter = df['volume'] > (df['VOL_20'] * 1.05)
+    adx_filter = df[f"ADX_{CONFIG['atr_period']}"] > 22
+    not_overextended = abs(df['close'].pct_change(3)) < 0.009
 
-    long_signal = base_long & volume_filter & adx_filter
-    short_signal = base_short & volume_filter & adx_filter
+    # Filter Baru: Hanya trade saat volatilitas di atas rata-rata
+    atr_col = 'ATRr_10'
+    volatility_filter = df[atr_col] > df[atr_col].rolling(100).median()
+
+    long_signal = base_long & volume_filter & adx_filter & not_overextended & volatility_filter
+    short_signal = base_short & volume_filter & adx_filter & not_overextended & volatility_filter
 
     return long_signal, short_signal, exit_params
 
@@ -66,36 +74,42 @@ def signal_version_B1(df):
     
     Expected: +20-30 trades from original B1
     """
+    # Dynamic SL/TP: SL multiplier dinamis berdasarkan volatilitas
+    dynamic_sl_multiplier = 1.0 + (df.get('atr_percentile', 0.5) * 0.3)
+
     cfg = CONFIG.get('strategy_b1_regime_filter', {
-        'adx_trending_threshold': 20,  # DOWN from 23
+        'adx_trending_threshold': 22,  # DOWN from 25 (Longgarkan)
         'adx_ranging_threshold': 20,   # UP from 18
-        'atr_delta_volatile_threshold': 2.0,  # UP from 1.5
+        'atr_delta_volatile_threshold': 2.0,  # Stricter volatility filter (Regime Detection Improve)
         'rsi_trending_long': 50,  # DOWN from 55
         'rsi_trending_short': 50,  # UP from 45
-        'sl_multiplier': 1.5,
+        # Gunakan SL dinamis, dengan fallback ke 1.5 jika tidak ada
+        'sl_multiplier': dynamic_sl_multiplier if 'atr_percentile' in df.columns else 1.5,
         'rr_ratio': 2.0
     })
 
     adx = df[f"ADX_{CONFIG['atr_period']}"]
-    atr_delta = df['ATR_delta']
+    atr_delta = df.get('ATR_delta', pd.Series(0, index=df.index))
+    supertrend_direction = df.get('SUPERTd_10_3.0', pd.Series(0, index=df.index))
 
     # Regime Detection
     is_trending = (adx > cfg['adx_trending_threshold'])
-    is_ranging = (adx < cfg['adx_ranging_threshold'])
+    is_ranging = (adx < cfg['adx_ranging_threshold']) # Disable B1 di ranging
     is_volatile = (atr_delta > cfg['atr_delta_volatile_threshold'])
 
     # Trend Following Setup (for trending markets)
     long_trend = (df['close'] > df['trend_ema_15m']) & \
                  (df['rsi_15m'] > cfg['rsi_trending_long']) & \
-                 (df['volume'] > df['VOL_20'] * 0.8)  # Volume confirmation
-    
+                 (df['volume'] > df['VOL_20'] * 1.05) & \
+                 (supertrend_direction == 1) # Gabung dengan SuperTrend
     short_trend = (df['close'] < df['trend_ema_15m']) & \
                   (df['rsi_15m'] < cfg['rsi_trending_short']) & \
-                  (df['volume'] > df['VOL_20'] * 0.8)
+                  (df['volume'] > df['VOL_20'] * 1.05) & \
+                  (supertrend_direction == -1) # Gabung dengan SuperTrend
 
     # Mean Reversion Setup (for ranging markets)
-    long_range = df['rsi_cross_long'] & (df['close'] < df['trend_ema_15m'])
-    short_range = df['rsi_cross_short'] & (df['close'] > df['trend_ema_15m'])
+    long_range = pd.Series(False, index=df.index) # Dinonaktifkan sesuai permintaan
+    short_range = pd.Series(False, index=df.index) # Dinonaktifkan sesuai permintaan
 
     # Combine based on regime
     long_signal = pd.Series(False, index=df.index)
@@ -107,9 +121,13 @@ def signal_version_B1(df):
     short_signal.loc[is_trending] = short_trend.loc[is_trending]
     short_signal.loc[is_ranging] = short_range.loc[is_ranging]
     
-    # Filter out extreme volatility only
-    long_signal = long_signal & ~is_volatile
-    short_signal = short_signal & ~is_volatile
+    # Filter Baru: Hanya trade saat volatilitas di atas rata-rata
+    atr_col = 'ATRr_10'
+    volatility_filter = df[atr_col] > df[atr_col].rolling(100).median()
+
+    # Filter out extreme volatility AND low volatility
+    long_signal = long_signal & ~is_volatile & volatility_filter
+    short_signal = short_signal & ~is_volatile & volatility_filter
 
     exit_params = {
         'sl_multiplier': cfg['sl_multiplier'],
@@ -289,16 +307,17 @@ STRATEGY_CONFIG = {
     
     "AdaptiveTrendRide(A3)": {
         "function": signal_version_A3,
-        "weight": 1.2  # INCREASED from 1.0 (your best performer gets more influence)
+        "weight": 0.70  # Bobot utama
     },
     "SmartRegimeScalper(B1)": {
         "function": signal_version_B1,
-        "weight": 1.0  # Standard weight
-    },
-    "HybridScalper": {
-        "function": signal_version_HYBRID_SCALPER,
-        "weight": 0.8  # LOWER weight = contributes signals but doesn't dominate consensus
+        "weight": 0.30  # Standard weight
     }
+    # ,
+    # "HybridScalper": {
+    #     "function": signal_version_HYBRID_SCALPER,
+    #     "weight": 0.8  # LOWER weight = contributes signals but doesn't dominate consensus
+    # }
     
     # === INACTIVE STRATEGIES (Commented out - enable for testing) ===
     

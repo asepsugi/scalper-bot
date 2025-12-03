@@ -79,6 +79,16 @@ async def fetch_binance_data(exchange, symbol, timeframe, limit, use_cache=True)
         # --- REVISI: Simpan DataFrame ke cache hanya jika diaktifkan ---
         if use_cache:
             with open(cache_file, 'wb') as f:
+                # Symbol & Data Focus: Tambah noise ke OHLC
+                if 'ATRr_10' in df.columns:
+                    atr = df['ATRr_10']
+                    noise_magnitude = 0.0005 * atr
+                    for col in ['open', 'high', 'low', 'close']:
+                        noise = np.random.normal(0, noise_magnitude)
+                        df[col] += noise
+                    # Pastikan high > low
+                    df['high'] = df[['high', 'low', 'open', 'close']].max(axis=1)
+                    df['low'] = df[['high', 'low', 'open', 'close']].min(axis=1)
                 pickle.dump(df, f)
             print(f"Saved {symbol} data to cache: {cache_file}")
         return df
@@ -125,6 +135,15 @@ def fetch_binance_data_sync(exchange, symbol, timeframe, limit, use_cache=True):
 
         if use_cache:
             with open(cache_file, 'wb') as f:
+                # Symbol & Data Focus: Tambah noise ke OHLC
+                if 'ATRr_10' in df.columns:
+                    atr = df['ATRr_10']
+                    noise_magnitude = 0.0005 * atr
+                    for col in ['open', 'high', 'low', 'close']:
+                        noise = np.random.normal(0, noise_magnitude)
+                        df[col] += noise
+                    df['high'] = df[['high', 'low', 'open', 'close']].max(axis=1)
+                    df['low'] = df[['high', 'low', 'open', 'close']].min(axis=1)
                 pickle.dump(df, f)
             print(f"Saved {symbol} data to cache: {cache_file}")
         return df, False # Kembalikan data dan flag 'from_cache'

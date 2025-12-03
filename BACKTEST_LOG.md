@@ -1,6 +1,141 @@
 
 ---
 
+## Backtest: 2025-12-03 17:56:38
+
+**Parameter:**
+-   **Simbol:** Top 20 (berdasarkan volume)
+-   **Candles:** 10000
+-   **Periode:** ~1 Bulan 27 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AdaptiveTrendRide(A3)` | 0.7 | $-2.36 | 87 | 63.22% |
+| `SmartRegimeScalper(B1)` | 0.3 | $0.00 | 0 | N/A |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $72.64                     |
+| **Net Profit**    | **[red]$-2.36 (-3.15%)[/red]**       |
+| Total Trades      | 87                         |
+| Win Rate          | 63.22%                     |
+| Profit Factor     | 0.81                       |
+| Max Drawdown      | 5.39%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-03 17:43:49
+
+**Parameter:**
+-   **Simbol:** Top 20 (berdasarkan volume)
+-   **Candles:** 10000
+-   **Periode:** ~17 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AdaptiveTrendRide(A3)` | 1.2 | $0.89 | 10 | 80.00% |
+| `SmartRegimeScalper(B1)` | 1.0 | $0.00 | 0 | N/A |
+| `HybridScalper` | 0.8 | $0.00 | 0 | N/A |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $75.89                     |
+| **Net Profit**    | **[green]$0.89 (+1.19%)[/green]**       |
+| Total Trades      | 10                         |
+| Win Rate          | 80.00%                     |
+| Profit Factor     | 2.02                       |
+| Max Drawdown      | 0.61%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-03 17:29:29
+
+**Parameter:**
+-   **Simbol:** Top 20 (berdasarkan volume)
+-   **Candles:** 10000
+-   **Periode:** ~15 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AdaptiveTrendRide(A3)` | 1.2 | $0.36 | 7 | 42.86% |
+| `SmartRegimeScalper(B1)` | 1.0 | $0.00 | 0 | N/A |
+| `HybridScalper` | 0.8 | $0.00 | 0 | N/A |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $75.36                     |
+| **Net Profit**    | **[green]$0.36 (+0.48%)[/green]**       |
+| Total Trades      | 7                         |
+| Win Rate          | 42.86%                     |
+| Profit Factor     | 1.94                       |
+| Max Drawdown      | 0.31%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-03 17:19:10
+
+**Parameter:**
+-   **Simbol:** Top 20 (berdasarkan volume)
+-   **Candles:** 10000
+-   **Periode:** ~15 Hari
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AdaptiveTrendRide(A3)` | 1.2 | $0.30 | 8 | 50.00% |
+| `SmartRegimeScalper(B1)` | 1.0 | $0.00 | 0 | N/A |
+| `HybridScalper` | 0.8 | $0.00 | 0 | N/A |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $75.30                     |
+| **Net Profit**    | **[green]$0.30 (+0.40%)[/green]**       |
+| Total Trades      | 8                         |
+| Win Rate          | 50.00%                     |
+| Profit Factor     | 1.92                       |
+| Max Drawdown      | 0.27%                      |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
 ## Backtest: 2025-12-03 16:48:13
 
 **Parameter:**

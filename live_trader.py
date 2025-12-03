@@ -10,7 +10,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from config import CONFIG, LEVERAGE_MAP, API_KEYS, TELEGRAM, LIVE_TRADING_CONFIG
+from config import CONFIG, LEVERAGE_MAP, API_KEYS, TELEGRAM, LIVE_TRADING_CONFIG, EXECUTION
 from indicators import fetch_binance_data, calculate_indicators
 from utils.common_utils import get_all_futures_symbols, get_dynamic_risk_params
 from utils.data_preparer import prepare_data
@@ -188,10 +188,17 @@ class LiveTrader:
                 task = await self.signal_queue.get()
                 symbol, df_5m = task['symbol'], task['data']
 
-                # --- OPTIMISASI: Pindahkan pemeriksaan balance ke execute_trade_logic ---
-                # Cek batas posisi hanya berdasarkan state internal untuk mengurangi panggilan API.
+                # --- Filter Batas Trade ---
                 # Hitung total eksposur: posisi aktif + order limit yang sedang dibuka
                 total_exposure = len(self.active_positions) + len(self.open_limit_orders)
+
+                # Filter Baru: Batas trade harian
+                today_str = datetime.now().strftime('%Y-%m-%d')
+                trades_today = len([t for t in self.trades if t['Exit Time'].strftime('%Y-%m-%d') == today_str])
+                if trades_today >= LIVE_TRADING_CONFIG.get('max_trades_per_day', 999):
+                    console.log(f"[yellow]SKIP SIGNAL for {symbol}: Batas trade harian ({trades_today}) telah tercapai.[/yellow]")
+                    continue
+
                 if total_exposure >= LIVE_TRADING_CONFIG.get('max_active_positions_limit', 10): # Gunakan batas statis sementara
                     console.log(f"[yellow]SKIP SIGNAL for {symbol}: Batas total eksposur ({total_exposure}) telah tercapai.[/yellow]")
                     continue
@@ -605,6 +612,10 @@ class LiveTrader:
                             final_position_details = position_info['info']
                             final_position_details.update(custom_state) # Tambahkan sl_price, tp_price, initial_sl, dll.
                             self.active_positions[symbol_ccxt] = final_position_details
+                            
+                            # --- FITUR BARU: Inisialisasi Multi-Level TP untuk Live ---
+                            # Panggil fungsi baru untuk menghitung dan menyimpan target TP parsial
+                            self.initialize_partial_tp_targets(symbol_ccxt)
 
                             self.save_positions_state()
                             filled_price = order.get('average', order.get('price'))
@@ -676,6 +687,29 @@ class LiveTrader:
             except Exception as e:
                 console.log(f"[red]Error di drawdown_circuit_breaker_check: {e}[/red]")
     
+    # --- FITUR BARU: Logika untuk inisialisasi target TP parsial ---
+    def initialize_partial_tp_targets(self, symbol):
+        """Menghitung dan menyimpan target TP parsial untuk posisi yang baru dibuka."""
+        pos_info = self.active_positions.get(symbol)
+        if not pos_info or 'initial_sl' not in pos_info:
+            return
+
+        entry_price = float(pos_info['entryPrice'])
+        initial_sl = float(pos_info['initial_sl'])
+        direction = "LONG" if float(pos_info['positionAmt']) > 0 else "SHORT"
+        risk_distance = abs(entry_price - initial_sl)
+
+        pos_info['partial_tp_targets'] = []
+        if risk_distance > 0:
+            for rr_multiplier, fraction in EXECUTION.get('partial_tps', []):
+                tp_price_target = entry_price + (risk_distance * rr_multiplier) if direction == 'LONG' else entry_price - (risk_distance * rr_multiplier)
+                pos_info['partial_tp_targets'].append({
+                    'rr': rr_multiplier,
+                    'fraction': fraction,
+                    'price': tp_price_target,
+                    'hit': False
+                })
+
     # --- FITUR BARU: Logika SL/TP berbasis penutupan candle ---
     async def check_manual_sl_tp(self):
         """Memeriksa posisi aktif terhadap data candle terbaru untuk SL/TP manual."""
@@ -688,37 +722,74 @@ class LiveTrader:
             for symbol in active_symbols:
                 try:
                     pos_info = self.active_positions.get(symbol)
-                    if not pos_info or 'sl_price' not in pos_info: continue
+                    if not pos_info or 'sl_price' not in pos_info or 'positionAmt' not in pos_info: continue
 
                     # Ambil candle terbaru yang sudah ditutup
                     latest_candle = self.historical_data.get(symbol, pd.DataFrame()).iloc[-1]
                     if latest_candle.empty: continue
 
-                    close_price = latest_candle['close']
+                    high_price = latest_candle['high']
+                    low_price = latest_candle['low']
                     sl_price = pos_info['sl_price']
-                    tp_price = pos_info['tp_price']
                     direction = "LONG" if float(pos_info['positionAmt']) > 0 else "SHORT"
 
-                    exit_reason = None
-                    # --- PERBAIKAN: Jangan cek TP jika trailing stop aktif ---
-                    is_trailing_active = pos_info.get('trailing_sl_active', False)
-
+                    # 1. Cek Stop Loss
                     if direction == "LONG":
-                        if close_price <= sl_price: exit_reason = "Manual SL (Close)"
-                        # Hanya picu TP jika trailing tidak aktif
-                        elif not is_trailing_active and close_price >= tp_price: exit_reason = "Manual TP (Close)"
+                        if low_price <= sl_price:
+                            await self.close_position_manually(symbol, "Manual SL (Low)")
+                            continue # Lanjut ke simbol berikutnya
                     elif direction == "SHORT":
-                        if close_price >= sl_price: exit_reason = "Manual SL (Close)"
-                        # Hanya picu TP jika trailing tidak aktif
-                        elif not is_trailing_active and close_price <= tp_price: exit_reason = "Manual TP (Close)"
+                        if high_price >= sl_price:
+                            await self.close_position_manually(symbol, "Manual SL (High)")
+                            continue # Lanjut ke simbol berikutnya
 
-                    if exit_reason:
-                        log_msg = f"MANUAL_EXIT_TRIGGER: {exit_reason} untuk {symbol} terpicu pada harga close {close_price}."
-                        console.log(f"[bold magenta]{log_msg}[/bold magenta]")
-                        await self.log_event(log_msg)
-                        await self.exchange.create_market_sell_order(symbol, abs(float(pos_info['positionAmt']))) if direction == "LONG" else await self.exchange.create_market_buy_order(symbol, abs(float(pos_info['positionAmt'])))
+                    # 2. Cek Take Profit Parsial
+                    for tp_target in pos_info.get('partial_tp_targets', []):
+                        if tp_target['hit']: continue
+
+                        is_hit = (direction == 'LONG' and high_price >= tp_target['price']) or \
+                                 (direction == 'SHORT' and low_price <= tp_target['price'])
+
+                        if is_hit:
+                            initial_amount = abs(float(pos_info.get('initialAmt', pos_info['positionAmt']))) # Gunakan initialAmt jika ada
+                            amount_to_close = initial_amount * tp_target['fraction']
+                            
+                            # Pastikan amount_to_close valid
+                            amount_to_close = float(self.exchange.amount_to_precision(symbol, amount_to_close))
+                            current_pos_amount = abs(float(pos_info['positionAmt']))
+                            
+                            # Jangan tutup lebih dari yang tersisa
+                            amount_to_close = min(amount_to_close, current_pos_amount)
+
+                            if amount_to_close > 0:
+                                await self.close_position_manually(symbol, f"Partial TP {tp_target['rr']}R", partial_amount=amount_to_close)
+                            tp_target['hit'] = True
+
                 except Exception as e:
                     console.log(f"[red]Error di check_manual_sl_tp untuk {symbol}: {e}[/red]")
+
+    async def close_position_manually(self, symbol, exit_reason, partial_amount=None):
+        """Helper untuk menutup posisi (penuh atau parsial) dengan market order."""
+        pos_info = self.active_positions.get(symbol)
+        if not pos_info: return
+        
+        try:
+            direction = "LONG" if float(pos_info['positionAmt']) > 0 else "SHORT"
+            amount_to_close = partial_amount if partial_amount is not None else abs(float(pos_info['positionAmt']))
+            
+            if amount_to_close <= 0: return
+
+            log_msg = f"MANUAL_EXIT_TRIGGER: {exit_reason} untuk {symbol}."
+            console.log(f"[bold magenta]{log_msg}[/bold magenta]")
+            await self.log_event(log_msg)
+            
+            if direction == "LONG":
+                await self.exchange.create_market_sell_order(symbol, amount_to_close)
+            else: # SHORT
+                await self.exchange.create_market_buy_order(symbol, amount_to_close)
+        except Exception as e:
+            console.log(f"[red]Error saat menutup posisi manual untuk {symbol}: {e}[/red]")
+            await self.log_event(f"MANUAL_EXIT_FAIL: {symbol} - {e}")
 
     # --- FITUR BARU: Circuit Breaker untuk Volatilitas Ekstrem ---
     async def volatility_circuit_breaker(self):
@@ -765,7 +836,7 @@ class LiveTrader:
                             log_msg = f"CIRCUIT_BREAKER_TRIGGERED: Volatilitas ekstrem & volume tinggi pada {symbol}. Menutup posisi di {mark_price}."
                             console.log(f"[bold red]{log_msg}[/bold red]")
                             await self.log_event(log_msg)
-                            await self.exchange.create_market_sell_order(symbol, abs(float(pos_info['positionAmt']))) if direction == "LONG" else await self.exchange.create_market_buy_order(symbol, abs(float(pos_info['positionAmt'])))
+                            await self.close_position_manually(symbol, "Circuit Breaker")
                         else:
                             # Harga menembus tapi volume rendah, kemungkinan glitch. Jangan panik.
                             pass
@@ -779,11 +850,12 @@ class LiveTrader:
         Mengelola Trailing Stop Loss untuk posisi yang profit.
         Memperbarui level SL secara dinamis untuk mengunci profit.
         """
-        if not LIVE_TRADING_CONFIG.get("trailing_sl_enabled", False):
+        trailing_config = EXECUTION.get("trailing", {})
+        if not trailing_config.get("enabled", False):
             return # Jangan jalankan jika fitur dinonaktifkan
 
         while True:
-            check_interval = LIVE_TRADING_CONFIG.get("trailing_sl_check_interval", 3)
+            check_interval = trailing_config.get("check_interval_seconds", 3)
             await asyncio.sleep(check_interval) # Periksa sesuai interval di config
             active_symbols = list(self.active_positions.keys())
             if not active_symbols:
@@ -807,7 +879,7 @@ class LiveTrader:
                     current_profit_distance = abs(mark_price - entry_price)
                     current_rr = current_profit_distance / risk_distance
 
-                    trigger_rr = LIVE_TRADING_CONFIG.get("trailing_sl_trigger_rr", 1.0)
+                    trigger_rr = trailing_config.get("trigger_rr", 1.0)
 
                     # Jika trade sudah mencapai target untuk memulai trailing
                     if current_rr >= trigger_rr:
@@ -819,7 +891,7 @@ class LiveTrader:
 
                         # Hitung level Trailing SL yang baru
                         atr_val = self.historical_data[symbol].iloc[-1][f"ATRr_{CONFIG['atr_period']}"]
-                        trail_dist = atr_val * LIVE_TRADING_CONFIG.get("trailing_sl_distance_atr", 1.5)
+                        trail_dist = atr_val * trailing_config.get("distance_atr", 1.5)
                         
                         new_sl = mark_price - trail_dist if direction == "LONG" else mark_price + trail_dist
                         
