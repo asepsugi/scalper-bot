@@ -4,7 +4,7 @@ from rich.console import Console
 from datetime import datetime
 from pathlib import Path
 
-from config import CONFIG, FEES, SLIPPAGE, LEVERAGE_MAP, LIVE_TRADING_CONFIG, BACKTEST_REALISM_CONFIG
+from config import CONFIG, FEES, SLIPPAGE, LEVERAGE_MAP, LIVE_TRADING_CONFIG, BACKTEST_REALISM_CONFIG, EXECUTION
 from utils.common_utils import get_dynamic_risk_params
 from indicators import fetch_binance_data_sync, calculate_indicators
 from utils.data_preparer import prepare_data
@@ -27,6 +27,10 @@ class PortfolioBacktester:
         self.pending_orders = {} # symbol -> pending_order_details
         # --- FITUR BARU: Lacak waktu trade terakhir untuk cooldown ---
         self.last_trade_time = {} # symbol -> timestamp
+        # --- FITUR BARU: State untuk Drawdown Circuit Breaker ---
+        self.peak_balance = initial_balance
+        self.drawdown_cooldown_until = None
+        # ---------------------------------------------------------
         self.exchange = None # Akan diinisialisasi oleh skrip pemanggil
         # NEW: Track fill statistics
         self.limit_order_stats = {
@@ -119,26 +123,49 @@ class PortfolioBacktester:
             'position_size_usd': order_details['position_size_usd'], 'margin_used': order_details['margin_used'],
             'strategy': order_details['strategy'], 'entry_fee': entry_fee,
         }
+        # --- FITUR BARU: Inisialisasi untuk Multi-Level TP ---
+        self.active_positions[symbol]['initial_position_size_usd'] = order_details['position_size_usd']
+        self.active_positions[symbol]['remaining_position_usd'] = order_details['position_size_usd']
+        self.active_positions[symbol]['partial_tp_targets'] = []
 
-    def close_trade(self, symbol, exit_price, exit_time, exit_reason):
+        risk_distance = abs(entry_price - order_details['initial_sl'])
+        for rr_multiplier, fraction in EXECUTION['partial_tps']:
+            if risk_distance > 0:
+                tp_price_target = entry_price + (risk_distance * rr_multiplier) if order_details['direction'] == 'LONG' else entry_price - (risk_distance * rr_multiplier)
+                self.active_positions[symbol]['partial_tp_targets'].append({
+                    'rr': rr_multiplier,
+                    'fraction': fraction,
+                    'price': tp_price_target,
+                    'hit': False
+                })
+        # Urutkan target dari yang paling dekat ke paling jauh
+        sort_reverse = order_details['direction'] == 'SHORT'
+        self.active_positions[symbol]['partial_tp_targets'].sort(key=lambda x: x['price'], reverse=sort_reverse)
+
+    def close_trade(self, symbol, exit_price, exit_time, exit_reason, size_to_close_usd=None):
         if symbol not in self.active_positions: return
         trade_details = self.active_positions[symbol]
         
         direction = trade_details['direction']
         entry_price = trade_details['entry_price']
-        position_size_usd = trade_details['position_size_usd']
+        position_size_to_close = size_to_close_usd if size_to_close_usd is not None else trade_details['remaining_position_usd']
 
         actual_exit_price = exit_price * (1 - SLIPPAGE['pct'] if direction == 'LONG' else 1 + SLIPPAGE['pct'])
-        exit_fee_rate = FEES['maker'] if exit_reason == 'Take Profit' else FEES['taker']
-        exit_fee = position_size_usd * exit_fee_rate
+        exit_fee_rate = FEES['maker'] if 'Take Profit' in exit_reason else FEES['taker']
+        exit_fee = position_size_to_close * exit_fee_rate
         total_fees = trade_details['entry_fee'] + exit_fee
 
         pnl_pct = (actual_exit_price - entry_price) / entry_price if direction == 'LONG' else (entry_price - actual_exit_price) / entry_price
-        pnl_usd = pnl_pct * position_size_usd if pd.notna(pnl_pct) and pd.notna(position_size_usd) else 0.0
+        pnl_usd = pnl_pct * position_size_to_close if pd.notna(pnl_pct) else 0.0
         net_pnl_usd = pnl_usd - total_fees
 
         if pd.notna(net_pnl_usd):
             self.balance += net_pnl_usd
+        
+        # --- FITUR BARU: Update Peak Balance setelah setiap trade ---
+        if self.balance > self.peak_balance:
+            self.peak_balance = self.balance
+        # ---------------------------------------------------------
 
         # --- FITUR BARU: Catat waktu penutupan trade untuk cooldown ---
         self.last_trade_time[symbol] = exit_time
@@ -148,14 +175,28 @@ class PortfolioBacktester:
             "Direction": direction, "Entry Time": trade_details.get('entry_time'), "Exit Time": exit_time,
             "PnL (USD)": net_pnl_usd, "Balance": self.balance, "Exit Reason": exit_reason,
         })
-        console.log(
-            f"Closed trade {trade_details['id']} on {symbol}. Reason: {exit_reason}. "
-            f"Net PnL: ${net_pnl_usd:,.2f} (Gross: ${pnl_usd:,.2f}, Fees: ${total_fees:,.2f}). New Balance: ${self.balance:,.2f}"
-        )
-        # Hapus dari posisi aktif setelah ditutup
-        if symbol in self.active_positions:
-            del self.active_positions[symbol]
 
+        trade_details['remaining_position_usd'] -= position_size_to_close
+
+        if trade_details['remaining_position_usd'] < 1: # Jika posisi sudah habis
+            console.log(
+                f"Closed trade {trade_details['id']} on {symbol}. Reason: {exit_reason}. "
+                f"Net PnL: ${net_pnl_usd:,.2f}. New Balance: ${self.balance:,.2f}"
+            )
+            del self.active_positions[symbol]
+        else: # Jika ini penutupan parsial
+            console.log(
+                f"Partially closed trade {trade_details['id']} on {symbol} ({exit_reason}). "
+                f"Closed ${position_size_to_close:,.2f} USD. Remaining: ${trade_details['remaining_position_usd']:,.2f} USD. "
+                f"PnL: ${net_pnl_usd:,.2f}."
+            )
+
+    def check_drawdown_and_cooldown(self, current_time):
+        """Memeriksa drawdown dan mengelola status cooldown."""
+        if self.drawdown_cooldown_until and current_time < self.drawdown_cooldown_until:
+            return False # Masih dalam masa cooldown
+        return True # Boleh trading
+        
     def create_pending_order(self, signal_row, signal_time, full_data, exit_params, symbol, current_risk_per_trade, default_leverage):
         if symbol in self.pending_orders: return
 
@@ -218,6 +259,17 @@ class PortfolioBacktester:
             'tp_price': take_profit_price, 'position_size_usd': position_size_usd,
             'margin_used': margin_for_this_trade, 'strategy': signal_row['strategy'],
         }
+
+    def check_and_trigger_drawdown(self, current_time):
+        """Memeriksa apakah drawdown terpicu dan memulai cooldown jika perlu."""
+        drawdown_pct = (self.peak_balance - self.balance) / self.peak_balance if self.peak_balance > 0 else 0
+        if drawdown_pct > LIVE_TRADING_CONFIG['max_drawdown_pct']:
+            if self.drawdown_cooldown_until is None or current_time > self.drawdown_cooldown_until:
+                cooldown_hours = LIVE_TRADING_CONFIG['drawdown_cooldown_hours']
+                self.drawdown_cooldown_until = current_time + pd.Timedelta(hours=cooldown_hours)
+                console.log(f"🚨 [bold red]DRAWDOWN CIRCUIT BREAKER TERPICU![/bold red] Drawdown: {drawdown_pct:.2%}. Trading dihentikan selama {cooldown_hours} jam.")
+                return True
+        return False
 
     def close_remaining_trades(self, all_data):
         """Closes any open positions at the end of the backtest."""
@@ -682,23 +734,39 @@ class PortfolioBacktester:
                     exit_reason = reason
                     break
                 
-                # Priority 3: Check Take Profit (only if trailing not active)
-                if not trade_details.get('trailing_sl_active', False):
-                    exit_price, reason, triggered = self.check_take_profit_realistic(trade_details, candle)
-                    if triggered:
-                        exit_reason = reason
-                        break
+                # --- FITUR BARU: Logika Multi-Level TP ---
+                # Priority 3: Check Partial Take Profits
+                for tp_target in trade_details['partial_tp_targets']:
+                    if tp_target['hit']: continue # Lewati jika sudah tercapai
+
+                    is_hit = (trade_details['direction'] == 'LONG' and candle['high'] >= tp_target['price']) or \
+                             (trade_details['direction'] == 'SHORT' and candle['low'] <= tp_target['price'])
+
+                    if is_hit:
+                        size_to_close = trade_details['initial_position_size_usd'] * tp_target['fraction']
+                        # Pastikan tidak menutup lebih dari sisa posisi
+                        size_to_close = min(size_to_close, trade_details['remaining_position_usd'])
+                        
+                        if size_to_close > 1:
+                            self.close_trade(symbol, tp_target['price'], candle.name, f"Partial TP {tp_target['rr']}R", size_to_close_usd=size_to_close)
+                        tp_target['hit'] = True
+                        
+                        # Jika posisi sudah tidak ada lagi setelah TP parsial, keluar dari loop candle
+                        if symbol not in self.active_positions:
+                            exit_reason = "Position fully closed by partial TPs"
+                            break
+                
+                if exit_reason: break # Keluar dari loop candle jika posisi sudah ditutup
                 
                 # Priority 4: Update Trailing Stop (if enabled)
-                if LIVE_TRADING_CONFIG.get("trailing_sl_enabled", False):
-                    self.update_trailing_stop(trade_details, candle)
+                self.update_trailing_stop(trade_details, candle)
                 
                 previous_candle = candle
             
-            if exit_reason:
+            if exit_reason and symbol not in closed_symbols and symbol in self.active_positions:
                 self.close_trade(symbol, exit_price, end_time, exit_reason)
                 closed_symbols.append(symbol)
-        
+
         # 2. Check Pending Orders for Fill or Expiry
         filled_symbols = []
         expired_symbols = []
@@ -744,6 +812,9 @@ class PortfolioBacktester:
             self.limit_order_stats['fill_rate'] = (
                 self.limit_order_stats['filled'] / self.limit_order_stats['attempted']
             )
+        
+        # 3. Check for Drawdown Trigger
+        self.check_and_trigger_drawdown(end_time)
     
     def get_results_with_realism_report(self, args):
         """

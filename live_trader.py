@@ -17,7 +17,7 @@ from utils.data_preparer import prepare_data
 from utils.telegram_notifier import TelegramNotifier
 from strategies import STRATEGY_CONFIG
 
-console = Console()
+console = Console(log_path=False) # Nonaktifkan logging duplikat dari Rich
 notifier = TelegramNotifier(TELEGRAM['bot_token'], TELEGRAM['chat_id'])
 
 # --- REVISI: Gunakan path absolut untuk file output agar tidak bergantung pada direktori kerja ---
@@ -53,6 +53,10 @@ class LiveTrader:
         self.cooldown_until = None
         self.cooldown_duration_hours = 6
         # --- FITUR BARU: Lacak volume real-time untuk Circuit Breaker ---
+        # --- FITUR BARU: State untuk Drawdown Circuit Breaker ---
+        self.peak_balance = 0.0
+        self.drawdown_cooldown_until = None
+        # ---------------------------------------------------------
         self.trade_volume_tracker = {} # {symbol: {'volume': float, 'last_update': datetime}}
         self.avg_5m_volume = {} # {symbol: float}
 
@@ -88,16 +92,20 @@ class LiveTrader:
     def save_positions_state(self):
         """Menyimpan posisi aktif ke file JSON."""
         with open(STATE_FILE, 'w') as f:
-            # Kita tidak bisa menyimpan objek kompleks, jadi simpan info penting saja
-            serializable_positions = {s: {'entryPrice': p['entryPrice'], 'positionAmt': p['positionAmt']} for s, p in self.active_positions.items()}
-            json.dump(serializable_positions, f, indent=4)
+            state_to_save = {
+                'active_positions': {s: {'entryPrice': p['entryPrice'], 'positionAmt': p['positionAmt']} for s, p in self.active_positions.items()},
+                'peak_balance': self.peak_balance
+            }
+            json.dump(state_to_save, f, indent=4)
 
     def load_positions_state(self):
         """Memuat posisi aktif dari file JSON saat bot dimulai."""
         if STATE_FILE.exists():
             with open(STATE_FILE, 'r') as f:
-                self.active_positions = json.load(f)
-            console.log(f"[yellow]State posisi dimuat dari {STATE_FILE}. Posisi aktif: {list(self.active_positions.keys())}[/yellow]")
+                state_data = json.load(f)
+                self.active_positions = state_data.get('active_positions', {})
+                self.peak_balance = state_data.get('peak_balance', 0.0)
+            console.log(f"[yellow]State dimuat dari {STATE_FILE}. Posisi: {len(self.active_positions)}, Peak Balance: ${self.peak_balance:.2f}[/yellow]")
 
     async def prefetch_data(self):
         """Mengambil data historis awal untuk setiap simbol."""
@@ -316,6 +324,11 @@ class LiveTrader:
 
     async def execute_trade_logic(self, symbol, direction, candle, exit_params, strategy_name, limit_price_float, sl_price_float, tp_price_float):
         """Menghitung parameter dan menempatkan order di bursa."""
+        # --- FITUR BARU: Cek Drawdown Circuit Breaker ---
+        if self.drawdown_cooldown_until and datetime.now() < self.drawdown_cooldown_until:
+            # Jika dalam masa cooldown drawdown, jangan lakukan apa-apa.
+            return
+
         # --- REVISI: Cek status cooldown sebelum eksekusi ---
         if self.cooldown_until and datetime.now() < self.cooldown_until:
             # Jika dalam masa cooldown, jangan lakukan apa-apa. Logging sudah dilakukan di signal_processor.
@@ -632,9 +645,36 @@ class LiveTrader:
                 await self.log_event(f"POSITION_MANAGER_FAIL: {e}")
                 if isinstance(e, ccxtpro.AuthenticationError) and "-2015" in str(e):
                     console.log("[bold yellow]Hint: Error -2015 biasanya berarti API Key tidak memiliki izin 'Enable Futures' atau IP Anda tidak di-whitelist. Silakan periksa pengaturan API Key di Binance.[/bold yellow]")
+                if "418" in str(e) and "banned" in str(e):
+                    await notifier.send_message(f"🚨 *IP DIBLOKIR (LIVE)!* 🚨\nBot tidak dapat melanjutkan. Harap ganti IP atau tunggu hingga blokir dicabut.\nError: `{str(e)}`")
                 if isinstance(e, ccxtpro.NotSupported):
                     break
                 await asyncio.sleep(10) # Tunggu sebelum mencoba lagi
+
+    # --- FITUR BARU: Drawdown Circuit Breaker ---
+    async def drawdown_circuit_breaker_check(self):
+        """Memeriksa drawdown akun secara periodik dan mengaktifkan cooldown jika perlu."""
+        while True:
+            await asyncio.sleep(60) # Periksa setiap menit
+            try:
+                balance_info = await self.exchange.fetch_balance()
+                current_balance = balance_info.get('USDT', {}).get('total', 0)
+
+                # Update peak balance
+                if current_balance > self.peak_balance:
+                    self.peak_balance = current_balance
+                    self.save_positions_state() # Simpan peak baru
+
+                # Cek drawdown
+                drawdown_pct = (self.peak_balance - current_balance) / self.peak_balance if self.peak_balance > 0 else 0
+                if drawdown_pct > LIVE_TRADING_CONFIG['max_drawdown_pct']:
+                    cooldown_hours = LIVE_TRADING_CONFIG['drawdown_cooldown_hours']
+                    self.drawdown_cooldown_until = datetime.now() + pd.Timedelta(hours=cooldown_hours)
+                    msg = f"🚨 *DRAWDOWN CIRCUIT BREAKER TERPICU!* 🚨\nDrawdown mencapai {drawdown_pct:.2%}. Semua trading dihentikan selama {cooldown_hours} jam."
+                    await self.log_event(msg.replace("*", ""))
+                    await notifier.send_message(msg)
+            except Exception as e:
+                console.log(f"[red]Error di drawdown_circuit_breaker_check: {e}[/red]")
     
     # --- FITUR BARU: Logika SL/TP berbasis penutupan candle ---
     async def check_manual_sl_tp(self):
@@ -860,6 +900,8 @@ class LiveTrader:
             all_tasks.append(self.check_manual_sl_tp())
             all_tasks.append(self.volatility_circuit_breaker())
             all_tasks.append(self.trailing_stop_manager())
+            # --- FITUR BARU: Jalankan Drawdown Circuit Breaker ---
+            all_tasks.append(self.drawdown_circuit_breaker_check())
 
         # Jalankan semua task yang sudah dikumpulkan
         await asyncio.gather(*all_tasks)

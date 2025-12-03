@@ -90,12 +90,21 @@ def run_scan(backtester, symbols, limit):
     # di antara current_time dan next_time.
     for i in range(len(all_timestamps)):
         current_time = all_timestamps[i]
+
+        # --- FITUR BARU: Cek Drawdown Circuit Breaker di Backtester ---
+        # Asumsikan kita menambahkan metode ini ke PortfolioBacktester
+        if not backtester.check_drawdown_and_cooldown(current_time):
+            # Jika circuit breaker aktif dan masih dalam masa cooldown, lewati iterasi ini
+            continue
+
         # Proses semua sinyal yang terjadi pada timestamp ini TERLEBIH DAHULU
         signals_at_this_time = [s for s in sorted_signals if s['timestamp'] == current_time]
         for signal in signals_at_this_time:
             backtester.process_new_signal(signal, all_data)
 
         # SEKARANG, jalankan simulasi dari current_time ke next_time
+        # Fungsi ini harus dimodifikasi di dalam backtester_engine.py untuk
+        # menangani Multi-Level TP dan Trailing Stop.
         # Ini akan memeriksa order yang BARU SAJA dibuat.
         next_time = all_timestamps[i+1] if i + 1 < len(all_timestamps) else None
         if not next_time: continue # Jangan proses iterasi terakhir

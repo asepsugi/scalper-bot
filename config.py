@@ -16,7 +16,7 @@ CONFIG = {
     "timeframe_signal": "5m",
     
     # CRITICAL FIX: Your risk was too high for a scalper
-    "risk_per_trade": 0.003,  # DOWN from 0.005 (0.3% instead of 0.5%)
+    "risk_per_trade": 0.002,  # DOWN from 0.005 (0.3% instead of 0.5%)
     
     # CRITICAL FIX: Your RR was too ambitious for scalping
     "risk_reward_ratio": 1.8,  # DOWN from 2.4 (more realistic)
@@ -37,7 +37,7 @@ CONFIG = {
     
     "body_strength_threshold": 0.6,
     "atr_volatility_threshold": 0.0005,
-    "account_balance": 50.0,
+    "account_balance": 75.0,
     "leverage": 10,
     "sr_lookback": 30,
     "swing_lookback": 60,
@@ -97,14 +97,14 @@ LIVE_TRADING_CONFIG = {
     "max_margin_usage_pct": 0.60,  # DOWN from 0.80 (more conservative)
     
     # CRITICAL FIX: Require stronger consensus
-    "consensus_ratio": 0.70,  # UP from 0.55 (fewer but better signals)
+    "consensus_ratio": 0.55,  # UP from 0.55 (fewer but better signals)
     
     # Circuit breaker - Tightened
     "circuit_breaker_multiplier": 1.3,  # DOWN from 1.5 (exit sooner)
     
     # Trailing stop - More aggressive
     "trailing_sl_enabled": True,
-    "trailing_sl_trigger_rr": 0.8,  # DOWN from 1.0 (start earlier)
+    "trailing_sl_trigger_rr": 1.2,  # SARAN: Mulai trailing setelah profit > 1R, misal 1.2R
     "trailing_sl_distance_atr": 1.0,  # DOWN from 1.5 (tighter trail)
     "trailing_sl_check_interval": 2,  # More frequent checks
     
@@ -117,6 +117,10 @@ LIVE_TRADING_CONFIG = {
     # NEW: Daily loss limit (stop trading for the day)
     "max_daily_loss_pct": 0.05,  # Stop at -5% daily loss
     
+    # NEW: Drawdown circuit breaker
+    "max_drawdown_pct": 0.20,  # Stop trading jika drawdown > 20% dari peak
+    "drawdown_cooldown_hours": 2, # Pause selama 2 jam setelah drawdown tercapai
+
     # NEW: Position sizing adjustments
     "scale_down_on_loss_streak": True,  # Reduce size after 2 losses
     "scale_up_on_win_streak": True,     # Increase after 3 wins (max 1.5x)
@@ -151,16 +155,17 @@ CONTRACT = {
 
 # Konfigurasi Eksekusi (Partial TP & Trailing Stop)
 EXECUTION = {
-  "partial_tps": [
-      # (fraksi_posisi, rr_multiplier)
-      (0.5, 1.0), # Tutup 50% posisi pada 1:1 RR
-      (0.5, 2.0)  # Tutup 50% sisa posisi pada 1:2 RR
-  ],
-  "trailing": {
-     "enabled": True,
-     "trigger_rr": 1.5,    # Mulai trailing saat harga mencapai 1.5x RR
-     "trail_dist_rr": 0.5, # Jarak trailing stop adalah 0.5x RR dari harga saat ini
-  }
+    "partial_tps": [
+        # (rr_multiplier, position_fraction_to_close)
+        (1.5, 0.5), # Tutup 50% posisi pada 1.5 RR
+        (2.5, 0.3), # Tutup 30% posisi pada 2.5 RR
+        (4.0, 0.2)  # Target akhir untuk 20% sisa posisi
+    ],
+    "trailing": {
+        "enabled": True,
+        "trigger_rr": 2.6,    # Mulai trailing setelah TP2 tercapai (misal: 2.6 RR)
+        "trail_dist_rr": 0.5, # Jarak trailing stop adalah 0.5x RR dari harga saat ini
+    }
 }
 
 # --- REVISI: Leverage Dinamis per Simbol ---
@@ -173,11 +178,11 @@ LEVERAGE_MAP = {
     # "DOGE/USDT": 8,
     
     # Stable coins - Moderate leverage
-    "BTC/USDT": 50,  # DOWN from 20
-    "ETH/USDT": 50,  # DOWN from 20
+    "BTC/USDT": 5,  # DOWN from 20
+    "ETH/USDT": 5,  # DOWN from 20
     
     # DEFAULT - Conservative
-    "DEFAULT": 25  # DOWN from 20 (much safer)
+    "DEFAULT": 5  # DOWN from 20 (much safer)
 }
 
 # ============================================================================

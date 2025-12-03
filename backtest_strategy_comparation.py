@@ -129,10 +129,15 @@ if __name__ == "__main__":
                 current_time = all_timestamps[i]
                 next_time = all_timestamps[i+1]
                 
+                # --- FITUR BARU: Cek Drawdown Circuit Breaker di Backtester ---
+                if not backtester.check_drawdown_and_cooldown(current_time):
+                    continue
+
                 # Temukan sinyal yang terjadi pada timestamp ini
                 current_signals = [s for s in sorted_signals if s['timestamp'] == current_time]
                 
                 # REVISI: Gunakan fungsi backtest yang lebih realistis untuk hasil yang andal
+                # Fungsi ini juga harus dimodifikasi untuk Multi-Level TP
                 # backtester.check_trades_and_orders(current_time, next_time, all_data)
                 backtester.check_trades_and_orders_fixed(current_time, next_time, all_data)
                 for signal in current_signals:
