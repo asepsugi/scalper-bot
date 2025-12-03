@@ -38,7 +38,6 @@ CONFIG = {
     "body_strength_threshold": 0.6,
     "atr_volatility_threshold": 0.0005,
     "account_balance": 75.0,
-    "leverage": 10,
     "sr_lookback": 30,
     "swing_lookback": 60,
     "volume_lookback": 20,
@@ -53,24 +52,37 @@ CONFIG = {
         "mta_rsi": True
     },
 
-    # Strategy B1 - Simplified parameters
-    "strategy_b1_regime_filter": {
-        "adx_trending_threshold": 22,  # Slightly lower
-        "adx_ranging_threshold": 18,
-        "atr_delta_volatile_threshold": 1.5,
-        "rsi_trending_long": 52,  # Closer to 50 (less extreme)
-        "rsi_trending_short": 48,
-        "sl_multiplier": 1.5,  # Loosened
-        "rr_ratio": 2.0        # Increased
+    # =========================================================================
+    # NEW: TWEAKABLE STRATEGY PARAMETERS
+    # =========================================================================
+    "strategy_params": {
+        "A3": {
+            "sl_base_multiplier": 1.0,
+            "sl_atr_pct_scaler": 0.3,
+            "rr_ratio": 1.8,
+            "volume_ratio": 1.05,
+            "adx_threshold": 22,
+            "not_overextended_pct": 0.009,
+            "volatility_median_window": 100
+        },
+        "B1": {
+            "adx_trending_threshold": 22,
+            "adx_ranging_threshold": 20,
+            "atr_delta_volatile_threshold": 2.0,
+            "rsi_trending_long": 50,
+            "rsi_trending_short": 50,
+            "sl_base_multiplier": 1.0,
+            "sl_atr_pct_scaler": 0.3,
+            "rr_ratio": 2.0,
+            "volume_ratio": 1.05,
+            "volatility_median_window": 100
+        }
     },
-    
+
     # NEW: Essential filters for scalping profitability
     "trade_filters": {
-        "avoid_hours_utc": [22, 23, 0, 1, 2],  # Extended (Asian session start)
-        "max_atr_delta_spike": 2.5,
-        "min_pivot_distance_atr": 0.3,  # Closer to levels
-        "min_volatility_atr_percentile": 0.25,  # Lower threshold
-        "max_spread_bps": 2.5  # NEW: Critical for scalping
+        # Hanya parameter ini yang masih digunakan di data_preparer.py
+        "min_volatility_atr_percentile": 0.25
     },
     
     # Disabled complex filters (keep it simple)
@@ -79,12 +91,6 @@ CONFIG = {
         "ob_impulse_atr_multiplier": 2.0,
         "ob_consecutive_candles": 2,
         "allow_contrarian_mode": False
-    },
-    
-    "strategy_f1_silver_bullet": {
-        "am_session_utc": [14, 15],
-        "pm_session_utc": [18, 19],
-        "lookback_period": 30
     }
 }
 
@@ -144,13 +150,6 @@ SLIPPAGE = {
   "pct": 0.0005         # Slippage sebagai fraksi dari harga (misal: 0.0003 = 0.03%)
 }
 
-# Metadata Kontrak Futures
-CONTRACT = {
-  "symbol": "BTCUSDT",
-  "contract_size": 0.001,  # Setiap kontrak merepresentasikan 0.001 BTC
-  "point_value": 1.0,      # Nilai per 1 poin pergerakan harga per 1 kontrak (dalam quote currency)
-}
-
 # Konfigurasi Eksekusi (Partial TP & Trailing Stop)
 EXECUTION = {
     # Strategi Take Profit Parsial
@@ -172,13 +171,12 @@ EXECUTION = {
 # Tentukan leverage spesifik untuk simbol tertentu.
 # Gunakan 'DEFAULT' untuk semua simbol lain yang tidak terdaftar.
 LEVERAGE_MAP = {
-    
     # Stable coins - Moderate leverage
-    "BTC/USDT": 15,
-    "ETH/USDT": 15,
+    "BTC/USDT": 10,
+    "ETH/USDT": 10,
     
     # DEFAULT - Conservative
-    "DEFAULT": 15  # Capped at 15x (Risk & Cooldown Enhance)
+    "DEFAULT": 10  # Capped at 10x (Risk & Cooldown Enhance)
 }
 
 # ============================================================================

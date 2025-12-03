@@ -3,6 +3,7 @@ from datetime import time
 import numpy as np
 from config import CONFIG
 
+from functools import wraps
 """
 Module ini berisi semua fungsi logika sinyal untuk berbagai versi strategi.
 Setiap fungsi menerima DataFrame yang sudah diproses dan mengembalikan
@@ -14,6 +15,41 @@ OPTIMIZATION NOTES:
 - HYBRID: Added high-frequency scalper (+50-100 trades)
 - Target: 80-150 total trades with 60-65% win rate
 """
+
+def validate_indicator_data(required_columns: list):
+    """
+    Decorator untuk memvalidasi DataFrame input sebelum menjalankan logika strategi.
+    Ini mencegah crash karena data yang tidak lengkap atau NaN dari websocket.
+    
+    Pemeriksaan:
+    1. DataFrame tidak None atau kosong.
+    2. Semua kolom yang dibutuhkan ada.
+    3. Nilai pada baris terakhir untuk kolom-kolom tersebut tidak NaN.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(df: pd.DataFrame, *args, **kwargs):
+            # 1. Cek jika DataFrame kosong
+            if df is None or df.empty:
+                # Tidak perlu log di sini karena akan terlalu berisik.
+                # Cukup kembalikan sinyal kosong.
+                return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+
+            # 2. Cek semua kolom yang dibutuhkan
+            missing_cols = [col for col in required_columns if col not in df.columns]
+            if missing_cols:
+                # Ini adalah error serius yang perlu dicatat, tapi hanya sekali.
+                # print(f"Strategy {func.__name__} skipped: Missing columns {missing_cols}")
+                return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+
+            # 3. Cek nilai NaN di baris terakhir untuk kolom-kolom penting
+            last_row = df.iloc[-1]
+            if last_row[required_columns].isnull().any():
+                return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+
+            return func(df, *args, **kwargs)
+        return wrapper
+    return decorator
 
 def signal_version_A3(df):
     """
@@ -29,13 +65,28 @@ def signal_version_A3(df):
     
     Expected: 40-60 trades (up from 15) with 65-70% WR
     """
+    # Tentukan kolom yang wajib ada untuk strategi ini
+    required_cols = [
+        'trend', 'rsi_15m', 'VOL_20', f"ADX_{CONFIG['atr_period']}", 'ATRr_10',
+        'atr_percentile', 'volume'
+    ]
+
+    # Validasi data sebelum melanjutkan
+    for col in required_cols:
+        if col not in df.columns: return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+
+    # Baca parameter dari config, dengan fallback ke nilai default yang aman
+    params = CONFIG.get("strategy_params", {}).get("A3", {})
+    sl_base = params.get("sl_base_multiplier", 1.0)
+    sl_scaler = params.get("sl_atr_pct_scaler", 0.3)
+
     # Dynamic SL/TP: SL multiplier dinamis berdasarkan volatilitas
     # atr_percentile (0-1) dipetakan ke SL multiplier (1.0-1.3)
-    dynamic_sl_multiplier = 1.0 + (df.get('atr_percentile', 0.5) * 0.3)
+    dynamic_sl_multiplier = sl_base + (df.get('atr_percentile', 0.5) * sl_scaler)
 
     exit_params = {
         'sl_multiplier': dynamic_sl_multiplier,
-        'rr_ratio': 1.8
+        'rr_ratio': params.get("rr_ratio", 1.8)
     }
 
     # Core A3 logic - RSI cross on 15m with trend alignment
@@ -46,14 +97,15 @@ def signal_version_A3(df):
                  (df['rsi_15m'].shift(1) > 50) & \
                  (df['rsi_15m'] < 50)
 
-    # Filters yang dilonggarkan
-    volume_filter = df['volume'] > (df['VOL_20'] * 1.05)
-    adx_filter = df[f"ADX_{CONFIG['atr_period']}"] > 22
-    not_overextended = abs(df['close'].pct_change(3)) < 0.009
+    # Filters yang sekarang dapat dikonfigurasi
+    volume_filter = df['volume'] > (df['VOL_20'] * params.get("volume_ratio", 1.05))
+    adx_filter = df[f"ADX_{CONFIG['atr_period']}"] > params.get("adx_threshold", 22)
+    not_overextended = abs(df['close'].pct_change(3)) < params.get("not_overextended_pct", 0.009)
 
     # Filter Baru: Hanya trade saat volatilitas di atas rata-rata
     atr_col = 'ATRr_10'
-    volatility_filter = df[atr_col] > df[atr_col].rolling(100).median()
+    volatility_window = params.get("volatility_median_window", 100)
+    volatility_filter = df[atr_col] > df[atr_col].rolling(volatility_window).median()
 
     long_signal = base_long & volume_filter & adx_filter & not_overextended & volatility_filter
     short_signal = base_short & volume_filter & adx_filter & not_overextended & volatility_filter
@@ -74,37 +126,47 @@ def signal_version_B1(df):
     
     Expected: +20-30 trades from original B1
     """
-    # Dynamic SL/TP: SL multiplier dinamis berdasarkan volatilitas
-    dynamic_sl_multiplier = 1.0 + (df.get('atr_percentile', 0.5) * 0.3)
+    # Tentukan kolom yang wajib ada untuk strategi ini
+    required_cols = [
+        'trend_ema_15m', 'rsi_15m', 'VOL_20', f"ADX_{CONFIG['atr_period']}",
+        'ATR_delta', 'SUPERTd_10_3.0', 'ATRr_10', 'atr_percentile', 'volume'
+    ]
 
-    cfg = CONFIG.get('strategy_b1_regime_filter', {
-        'adx_trending_threshold': 22,  # DOWN from 25 (Longgarkan)
-        'adx_ranging_threshold': 20,   # UP from 18
-        'atr_delta_volatile_threshold': 2.0,  # Stricter volatility filter (Regime Detection Improve)
-        'rsi_trending_long': 50,  # DOWN from 55
-        'rsi_trending_short': 50,  # UP from 45
-        # Gunakan SL dinamis, dengan fallback ke 1.5 jika tidak ada
-        'sl_multiplier': dynamic_sl_multiplier if 'atr_percentile' in df.columns else 1.5,
-        'rr_ratio': 2.0
-    })
+    # Validasi data sebelum melanjutkan
+    for col in required_cols:
+        if col not in df.columns:
+            # Jika ada kolom yang hilang, kembalikan sinyal kosong untuk mencegah crash
+            empty_signal = pd.Series(False, index=df.index)
+            return empty_signal, empty_signal, {}
+
+    # Baca parameter dari config, dengan fallback ke nilai default yang aman
+    params = CONFIG.get("strategy_params", {}).get("B1", {})
+    sl_base = params.get("sl_base_multiplier", 1.0)
+    sl_scaler = params.get("sl_atr_pct_scaler", 0.3)
+
+    # Dynamic SL/TP: SL multiplier dinamis berdasarkan volatilitas
+    dynamic_sl_multiplier = sl_base + (df.get('atr_percentile', 0.5) * sl_scaler)
+
+    # Gunakan parameter dari config
+    sl_multiplier = dynamic_sl_multiplier if 'atr_percentile' in df.columns else 1.5
 
     adx = df[f"ADX_{CONFIG['atr_period']}"]
     atr_delta = df.get('ATR_delta', pd.Series(0, index=df.index))
     supertrend_direction = df.get('SUPERTd_10_3.0', pd.Series(0, index=df.index))
 
     # Regime Detection
-    is_trending = (adx > cfg['adx_trending_threshold'])
-    is_ranging = (adx < cfg['adx_ranging_threshold']) # Disable B1 di ranging
-    is_volatile = (atr_delta > cfg['atr_delta_volatile_threshold'])
+    is_trending = (adx > params.get("adx_trending_threshold", 22))
+    is_ranging = (adx < params.get("adx_ranging_threshold", 20)) # Disable B1 di ranging
+    is_volatile = (atr_delta > params.get("atr_delta_volatile_threshold", 2.0))
 
     # Trend Following Setup (for trending markets)
     long_trend = (df['close'] > df['trend_ema_15m']) & \
-                 (df['rsi_15m'] > cfg['rsi_trending_long']) & \
-                 (df['volume'] > df['VOL_20'] * 1.05) & \
+                 (df['rsi_15m'] > params.get("rsi_trending_long", 50)) & \
+                 (df['volume'] > df['VOL_20'] * params.get("volume_ratio", 1.05)) & \
                  (supertrend_direction == 1) # Gabung dengan SuperTrend
     short_trend = (df['close'] < df['trend_ema_15m']) & \
-                  (df['rsi_15m'] < cfg['rsi_trending_short']) & \
-                  (df['volume'] > df['VOL_20'] * 1.05) & \
+                  (df['rsi_15m'] < params.get("rsi_trending_short", 50)) & \
+                  (df['volume'] > df['VOL_20'] * params.get("volume_ratio", 1.05)) & \
                   (supertrend_direction == -1) # Gabung dengan SuperTrend
 
     # Mean Reversion Setup (for ranging markets)
@@ -123,15 +185,16 @@ def signal_version_B1(df):
     
     # Filter Baru: Hanya trade saat volatilitas di atas rata-rata
     atr_col = 'ATRr_10'
-    volatility_filter = df[atr_col] > df[atr_col].rolling(100).median()
+    volatility_window = params.get("volatility_median_window", 100)
+    volatility_filter = df[atr_col] > df[atr_col].rolling(volatility_window).median()
 
     # Filter out extreme volatility AND low volatility
     long_signal = long_signal & ~is_volatile & volatility_filter
     short_signal = short_signal & ~is_volatile & volatility_filter
 
     exit_params = {
-        'sl_multiplier': cfg['sl_multiplier'],
-        'rr_ratio': cfg['rr_ratio']
+        'sl_multiplier': sl_multiplier,
+        'rr_ratio': params.get("rr_ratio", 2.0)
     }
 
     return long_signal, short_signal, exit_params
