@@ -458,13 +458,20 @@ class LiveTrader:
                     'stopLoss': {'type': 'STOP_MARKET', 'triggerPrice': sl_price_str},
                     'takeProfit': {'type': 'TAKE_PROFIT_MARKET', 'triggerPrice': tp_price_str}
                 }
-            order = await self.exchange.create_order(symbol, 'limit', side, amount, limit_price_str, params)
+
+            # --- PERBAIKAN: Gunakan tipe order yang dapat dikonfigurasi ---
+            entry_order_type = EXECUTION.get("entry_order_type", "limit")
+            if entry_order_type == "market":
+                # Untuk market order, kita tidak perlu harga limit
+                order = await self.exchange.create_order(symbol, 'market', side, amount, None, params)
+            else: # Default ke limit order
+                order = await self.exchange.create_order(symbol, 'limit', side, amount, limit_price_str, params)
 
             # --- PERBAIKAN: Simpan state order (termasuk initial_sl) di open_limit_orders ---
             self.open_limit_orders[symbol] = {
                 'sl_price': sl_price_float,
                 'tp_price': tp_price_float,
-                'initial_sl': sl_price_float, # Saat dibuat, sl_price adalah initial_sl
+                'initial_sl': sl_price_float,
                 'entryPrice': limit_price_float, # Simpan harga entry yang diinginkan
                 'positionAmt': amount if side == 'buy' else -amount,
                 'strategy': strategy_name

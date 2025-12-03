@@ -127,8 +127,19 @@ class PortfolioBacktester:
     def open_trade(self, symbol, order_details, fill_time):
         if symbol in self.active_positions: return
 
-        entry_price = order_details['limit_price'] * (1 + SLIPPAGE['pct'] if order_details['direction'] == 'LONG' else 1 - SLIPPAGE['pct'])
-        entry_fee = order_details['position_size_usd'] * FEES['maker']
+        # --- PERBAIKAN: Tentukan entry price dan fee berdasarkan tipe order ---
+        entry_order_type = order_details.get('entry_order_type', 'limit')
+        if entry_order_type == 'market':
+            # Untuk market order, entry price adalah harga saat sinyal (sudah di-pass di fill_time)
+            # Slippage tetap berlaku
+            base_price = order_details['limit_price'] # Gunakan 'limit_price' sebagai proxy harga sinyal
+            entry_fee_rate = FEES['taker']
+        else: # limit order
+            base_price = order_details['limit_price']
+            entry_fee_rate = FEES['maker']
+        
+        entry_price = base_price * (1 + SLIPPAGE['pct'] if order_details['direction'] == 'LONG' else 1 - SLIPPAGE['pct'])
+        entry_fee = order_details['position_size_usd'] * entry_fee_rate
 
         self.trade_id_counter += 1
         console.log(
@@ -264,21 +275,38 @@ class PortfolioBacktester:
         if (total_margin_used + margin_for_this_trade) > self.balance:
             return
 
-        console.log(f"[blue]Creating pending {direction} order for {symbol} at limit price {limit_price:.5f} (Leverage: {leverage_for_symbol}x)[/blue]")
+        # --- PERBAIKAN: Cek tipe order dari konfigurasi SEBELUM logging ---
+        entry_order_type = EXECUTION.get("entry_order_type", "limit")
+
+        # --- PERBAIKAN: Sesuaikan pesan log berdasarkan tipe order ---
+        if entry_order_type == "market":
+            # Untuk market order, "limit_price" sebenarnya adalah harga referensi saat sinyal
+            console.log(f"[blue]Preparing MARKET {direction} order for {symbol} at signal price {signal_price:.5f} (Leverage: {leverage_for_symbol}x)[/blue]")
+        else:
+            console.log(f"[blue]Creating pending LIMIT {direction} order for {symbol} at limit price {limit_price:.5f} (Leverage: {leverage_for_symbol}x)[/blue]")
 
         stop_loss_price = limit_price - stop_loss_dist if direction == 'LONG' else limit_price + stop_loss_dist
         take_profit_price = limit_price + (stop_loss_dist * rr_ratio) if direction == 'LONG' else limit_price - (stop_loss_dist * rr_ratio)
         
         timeframe_duration = pd.to_timedelta(CONFIG['timeframe_signal'])
         expiration_time = signal_time + (timeframe_duration * expiration_candles)
-
-        self.pending_orders[symbol] = {
+        
+        order_details = {
             'creation_time': signal_time, 'expiration_time': expiration_time,
             'limit_price': limit_price, 'direction': direction,
             'sl_price': stop_loss_price, 'initial_sl': stop_loss_price,
             'tp_price': take_profit_price, 'position_size_usd': position_size_usd,
             'margin_used': margin_for_this_trade, 'strategy': signal_row['strategy'],
+            'entry_order_type': entry_order_type # Simpan tipe order
         }
+
+        # --- PERBAIKAN: Langsung eksekusi jika market order ---
+        if entry_order_type == "market":
+            # Untuk market order, kita asumsikan terisi pada harga penutupan candle sinyal
+            # Slippage akan ditambahkan di dalam fungsi open_trade
+            self.open_trade(symbol, order_details, signal_time)
+        else: # Jika limit order, buat pending order seperti biasa
+            self.pending_orders[symbol] = order_details
 
     def check_and_trigger_drawdown(self, current_time):
         """Memeriksa apakah drawdown terpicu dan memulai cooldown jika perlu."""

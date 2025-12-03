@@ -362,12 +362,20 @@ class DemoTrader:
             console.log(f"Leverage demo untuk {symbol} diatur ke {leverage}x.")
 
             side = 'buy' if direction == 'LONG' else 'sell'
-            params = {
-                'stopLoss': {'type': 'STOP_MARKET', 'triggerPrice': sl_price_str},
-                'takeProfit': {'type': 'TAKE_PROFIT_MARKET', 'triggerPrice': tp_price_str}
-            }
+            params = {}
+            if not LIVE_TRADING_CONFIG.get("use_advanced_exit_logic", True):
+                # Mode Statis: Tempatkan SL/TP langsung di bursa
+                params = {
+                    'stopLoss': {'type': 'STOP_MARKET', 'triggerPrice': sl_price_str},
+                    'takeProfit': {'type': 'TAKE_PROFIT_MARKET', 'triggerPrice': tp_price_str}
+                }
             
-            order = await self.exchange.create_order(symbol, 'limit', side, amount, limit_price_str, params)
+            # --- PERBAIKAN: Selaraskan dengan live_trader, gunakan tipe order yang dapat dikonfigurasi ---
+            entry_order_type = EXECUTION.get("entry_order_type", "limit")
+            if entry_order_type == "market":
+                order = await self.exchange.create_order(symbol, 'market', side, amount, None, params)
+            else: # Default ke limit order
+                order = await self.exchange.create_order(symbol, 'limit', side, amount, limit_price_str, params)
             
             self.open_limit_orders.add(symbol)
 

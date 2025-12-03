@@ -7,13 +7,18 @@ import pickle
 import sys  # <-- Tambahkan import ini
 import os   # <-- Tambahkan import ini
 import numpy as np # <-- Tambahkan import ini
+from datetime import datetime, timedelta # <-- Tambahkan import ini
+import threading # <-- PERBAIKAN: Impor modul threading untuk lock
 from scipy import stats # PERBAIKAN: Tambahkan import yang hilang untuk linear regression
 
-from config import CONFIG
+from config import CONFIG, CACHE_CONFIG
 
 # =============================================================================
 # DATA FETCHING & INDICATOR FUNCTIONS
 # =============================================================================
+
+# --- PERBAIKAN: Buat lock global untuk melindungi akses ke sys.stdout ---
+stdout_lock = threading.Lock()
 
 # --- REVISI: Tambahkan direktori cache ---
 CACHE_DIR = Path("cache")
@@ -104,10 +109,28 @@ def fetch_binance_data_sync(exchange, symbol, timeframe, limit, use_cache=True):
     safe_symbol = symbol.replace('/', '_')
     cache_file = CACHE_DIR / f"{safe_symbol}_{timeframe}_{limit}.pkl"
 
-    if use_cache and cache_file.exists():
-        print(f"Loading {symbol} data from cache (use_cache=True): {cache_file}")
-        with open(cache_file, 'rb') as f:
-            return pickle.load(f), True # Kembalikan data dan flag 'from_cache'
+    # --- PERBAIKAN: Logika Cache dengan Kedaluwarsa dan Penanganan Error ---
+    if use_cache and CACHE_CONFIG.get("enabled", True) and cache_file.exists():
+        try:
+            # Cek masa berlaku cache
+            file_mod_time = datetime.fromtimestamp(cache_file.stat().st_mtime)
+            expiration_hours = CACHE_CONFIG.get("expiration_hours", 24)
+            if datetime.now() - file_mod_time > timedelta(hours=expiration_hours):
+                print(f"Cache for {symbol} has expired. Fetching new data.")
+            else:
+                # Jika cache valid, coba muat
+                print(f"Loading {symbol} data from cache: {cache_file}")
+                with open(cache_file, 'rb') as f:
+                    return pickle.load(f), True # Kembalikan data dan flag 'from_cache'
+        except (pickle.UnpicklingError, EOFError) as e:
+            # Jika file cache rusak, hapus dan lanjutkan untuk mengambil data baru
+            print(f"Cache file for {symbol} is corrupted ({e}). Deleting and fetching new data.")
+            try:
+                os.remove(cache_file)
+            except OSError as ose:
+                print(f"Error deleting corrupted cache file {cache_file}: {ose}")
+        except Exception as e:
+            print(f"An unexpected error occurred with cache handling for {symbol}: {e}")
 
     if not exchange:
         print("Exchange is not initialized. Cannot fetch data.")
@@ -175,68 +198,70 @@ def calculate_indicators(df):
     if df is None or df.empty:
         print("DEBUG: calculate_indicators received empty or None DataFrame.")
         return pd.DataFrame()
-    # --- PERBAIKAN DEFINITIF: Bungkam semua output print dari blok ini ---
-    original_stdout = sys.stdout
-    sys.stdout = open(os.devnull, 'w')
-    try:
-        # =========================================================================
-        # TREND INDICATORS
-        # =========================================================================
-        df.ta.ema(length=9, append=True)
-        df.ta.ema(length=CONFIG["ema_period"], append=True)
-        df.ta.ema(length=200, append=True)
-        
-        # =========================================================================
-        # MOMENTUM INDICATORS
-        # =========================================================================
-        df.ta.rsi(length=CONFIG["rsi_period"], append=True)
-        df.ta.willr(length=14, append=True)
-        df.ta.mfi(length=14, append=True)
-        
-        # =========================================================================
-        # VOLATILITY INDICATORS
-        # =========================================================================
-        df.ta.atr(length=10, append=True)
-        
-        bbands = df.ta.bbands(length=20, std=2, append=True)
-        if bbands is not None and not bbands.empty:
-            rename_map = {f'{col}_2.0': col for col in ['BBL_20_2.0', 'BBM_20_2.0', 'BBU_20_2.0', 'BBB_20_2.0', 'BBP_20_2.0'] if f'{col}_2.0' in df.columns}
-            if rename_map:
-                df.rename(columns=rename_map, inplace=True)
+    
+    # --- PERBAIKAN: Gunakan lock untuk membuat pengalihan stdout menjadi thread-safe ---
+    with stdout_lock:
+        original_stdout = sys.stdout
+        f = open(os.devnull, 'w')
+        sys.stdout = f
+        try:
+            # =========================================================================
+            # TREND INDICATORS
+            # =========================================================================
+            df.ta.ema(length=9, append=True)
+            df.ta.ema(length=CONFIG["ema_period"], append=True)
+            df.ta.ema(length=200, append=True)
+            
+            # =========================================================================
+            # MOMENTUM INDICATORS
+            # =========================================================================
+            df.ta.rsi(length=CONFIG["rsi_period"], append=True)
+            df.ta.willr(length=14, append=True)
+            df.ta.mfi(length=14, append=True)
+            
+            # =========================================================================
+            # VOLATILITY INDICATORS
+            # =========================================================================
+            df.ta.atr(length=10, append=True)
+            
+            bbands = df.ta.bbands(length=20, std=2, append=True)
+            if bbands is not None and not bbands.empty:
+                rename_map = {f'{col}_2.0': col for col in ['BBL_20_2.0', 'BBM_20_2.0', 'BBU_20_2.0', 'BBB_20_2.0', 'BBP_20_2.0'] if f'{col}_2.0' in df.columns}
+                if rename_map:
+                    df.rename(columns=rename_map, inplace=True)
 
-        if 'BBU_20_2.0' not in df.columns:
-            for col in ['BBL_20_2.0', 'BBM_20_2.0', 'BBU_20_2.0', 'BBB_20_2.0', 'BBP_20_2.0']:
-                if col not in df.columns: df[col] = np.nan
-        
-        df.ta.kc(length=20, scalar=2.0, append=True)
-        
-        # =========================================================================
-        # TREND STRENGTH
-        # =========================================================================
-        df.ta.adx(length=CONFIG["atr_period"], append=True)
-        df.ta.supertrend(length=10, multiplier=3.0, append=True)
-        
-        # =========================================================================
-        # VOLUME INDICATORS
-        # =========================================================================
-        df.ta.sma(close=df['volume'], length=CONFIG["volume_lookback"], prefix="VOL", append=True)
-        df.ta.obv(append=True)
-        
-        default_vol_col = f"VOL_SMA_{CONFIG['volume_lookback']}"
-        target_vol_col = f"VOL_{CONFIG['volume_lookback']}"
-        if default_vol_col in df.columns:
-            df.rename(columns={default_vol_col: target_vol_col}, inplace=True)
-        
-        # =========================================================================
-        # CHANNELS & VWAP
-        # =========================================================================
-        df.ta.donchian(length=20, append=True)
-        df.ta.vwap(append=True)
+            if 'BBU_20_2.0' not in df.columns:
+                for col in ['BBL_20_2.0', 'BBM_20_2.0', 'BBU_20_2.0', 'BBB_20_2.0', 'BBP_20_2.0']:
+                    if col not in df.columns: df[col] = np.nan
+            
+            df.ta.kc(length=20, scalar=2.0, append=True)
+            
+            # =========================================================================
+            # TREND STRENGTH
+            # =========================================================================
+            df.ta.adx(length=CONFIG["atr_period"], append=True)
+            df.ta.supertrend(length=10, multiplier=3.0, append=True)
+            
+            # =========================================================================
+            # VOLUME INDICATORS
+            # =========================================================================
+            df.ta.sma(close=df['volume'], length=CONFIG["volume_lookback"], prefix="VOL", append=True)
+            df.ta.obv(append=True)
+            
+            default_vol_col = f"VOL_SMA_{CONFIG['volume_lookback']}"
+            target_vol_col = f"VOL_{CONFIG['volume_lookback']}"
+            if default_vol_col in df.columns:
+                df.rename(columns={default_vol_col: target_vol_col}, inplace=True)
+            
+            # =========================================================================
+            # CHANNELS & VWAP
+            # =========================================================================
+            df.ta.donchian(length=20, append=True)
+            df.ta.vwap(append=True)
 
-    finally:
-        # --- PERBAIKAN DEFINITIF: Kembalikan output print ke normal ---
-        sys.stdout.close()
-        sys.stdout = original_stdout
+        finally:
+            sys.stdout = original_stdout
+            f.close()
 
     # --- Kalkulasi indikator kustom dilakukan di luar blok yang dibungkam ---
     # 1. ATR Percentile (for volatility regime detection)

@@ -16,10 +16,7 @@ CONFIG = {
     "timeframe_signal": "5m",
 
     # CRITICAL FIX: Your risk was too high for a scalper
-    "risk_per_trade": 0.002,  # DOWN from 0.005 (0.3% instead of 0.5%)
-    
-    # CRITICAL FIX: Your RR was too ambitious for scalping
-    "risk_reward_ratio": 1.8,  # DOWN from 2.4 (more realistic)
+    "risk_per_trade": 0.003,  # DOWN from 0.005 (0.3% instead of 0.5%)
     
     "fib_levels": [1.618, 1.88, 2.618],
     "buffer_pips": 0.0001,
@@ -32,8 +29,6 @@ CONFIG = {
     
     # CRITICAL FIX: Tighter ATR for scalping
     "atr_period": 10,  # DOWN from 14 (faster response)
-    "atr_multiplier": 1.0,  # DOWN from 1.2 (tighter stops)
-    "atr_multiplier_breakout": 0.8,  # Even tighter for breakouts
     
     "body_strength_threshold": 0.6,
     "atr_volatility_threshold": 0.0005,
@@ -97,9 +92,6 @@ CONFIG = {
 LIVE_TRADING_CONFIG = {
     "max_symbols_to_trade": 20,  # DOWN from 30 (Symbol & Data Focus)
     
-    # CRITICAL FIX: Match the per-trade risk
-    "risk_per_trade": 0.002,  # DOWN from 0.003 (Risk & Cooldown Enhance)
-    
     "max_margin_usage_pct": 0.60,  # DOWN from 0.80 (more conservative)
     
     # CRITICAL FIX: Require stronger consensus
@@ -139,6 +131,14 @@ BACKTEST_REALISM_CONFIG = {
     "volume_factor_multiplier": 0.2 # Seberapa besar pengaruh volume (lebih kecil = pengaruh lebih besar)
 }
 
+# ============================================================================
+# NEW: CACHE CONFIGURATION
+# ============================================================================
+CACHE_CONFIG = {
+    "enabled": True,
+    "expiration_hours": 24  # Invalidate cache files older than 24 hours
+}
+
 # Biaya dan Slippage
 FEES = {
   "maker": 0.0002,      # Biaya untuk limit order (fraksi)
@@ -152,18 +152,16 @@ SLIPPAGE = {
 
 # Konfigurasi Eksekusi (Partial TP & Trailing Stop)
 EXECUTION = {
-    # Strategi Take Profit Parsial
+    "entry_order_type": "limit", # "limit" atau "market"
     "partial_tps": [
-        # (rr_multiplier, position_fraction_to_close)
-        (1.5, 0.5), # Tutup 50% posisi pada 1.5 RR
-        (2.5, 0.3), # Tutup 30% posisi pada 2.5 RR
-        (4.0, 0.2)  # Target akhir untuk 20% sisa posisi
+        (5.0, 0.5),   # 50% baru keluar di 5 RR
+        (10.0, 0.3),  # 30% di 10 RR
     ],
     "trailing": {
         "enabled": True,
-        "trigger_rr": 2.6,      # Mulai trailing setelah TP2 tercapai (misal: 2.6 RR)
-        "distance_atr": 1.0,        # Jarak trailing stop dari harga (dalam kelipatan ATR)
-        "check_interval_seconds": 2 # Seberapa sering memeriksa untuk update trailing SL
+        "trigger_rr": 5.5,
+        "distance_atr": 2.5,        # Sangat longgar, biar rider beneran ride
+        "check_interval_seconds": 5
     }
 }
 

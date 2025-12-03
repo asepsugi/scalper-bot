@@ -1,10 +1,12 @@
 import argparse
+import asyncio
 import pandas as pd
 import numpy as np
-import time # Impor modul time
+import time
 import ccxt
 from rich.console import Console
 
+from utils.backtester_engine import PortfolioBacktester
 from config import CONFIG, LIVE_TRADING_CONFIG, API_KEYS
 from strategies import STRATEGY_CONFIG
 from utils.backtester_engine import PortfolioBacktester # REVISI: Impor engine backtesting
@@ -12,35 +14,38 @@ from utils.common_utils import get_all_futures_symbols
 
 console = Console()
 
-def run_scan(backtester, symbols, limit):
-    """Scans all symbols, finds signals, and simulates trades."""
+async def run_scan(backtester, symbols, limit):
+    """
+    PERBAIKAN: Mengubah menjadi fungsi async.
+    Memindai semua simbol, menemukan sinyal, dan mensimulasikan perdagangan secara konkuren.
+    """
     all_signals = []
     all_data = {}
 
-    console.log(f"Starting sequential data fetching for {len(symbols)} symbols to avoid rate limits...")
-    for i, symbol in enumerate(symbols):
-        try:
-            console.log(f"({i+1}/{len(symbols)}) Fetching data for [bold cyan]{symbol}[/bold cyan]...")
-            result_df, from_cache = backtester.fetch_and_prepare_symbol_data(symbol, limit)
-            if result_df is not None and not result_df.empty:
-                all_data[symbol] = result_df
-                console.log(f"({i+1}/{len(symbols)}) Successfully processed [bold cyan]{symbol}[/bold cyan] (from cache: {not from_cache})")
-            else:
-                console.log(f"({i+1}/{len(symbols)}) [yellow]Skipping {symbol} due to data issues.[/yellow]")
-            
-            if not from_cache:
-                console.log("   [dim]Data fetched from API, sleeping for 1s to respect rate limits...[/dim]")
-                time.sleep(1)
-            else:
-                time.sleep(0.05)
-        except Exception as exc:
-            console.log(f"({i+1}/{len(symbols)}) [bold red]Error processing {symbol}: {exc}[/bold red]")
+    # --- PERBAIKAN: Pengambilan data konkuren ---
+    console.log(f"Starting concurrent data fetching for {len(symbols)} symbols...")
+    
+    # Buat loop event untuk menjalankan tugas-tugas async di dalam fungsi sync
+    loop = asyncio.get_event_loop()
+    
+    # Buat daftar tugas, bungkus panggilan sinkron dalam executor
+    tasks = [loop.run_in_executor(None, backtester.fetch_and_prepare_symbol_data, symbol, limit) for symbol in symbols]
+    
+    results = await asyncio.gather(*tasks)
+
+    for i, (result_df, from_cache) in enumerate(results):
+        symbol = symbols[i]
+        if result_df is not None and not result_df.empty:
+            all_data[symbol] = result_df
+            console.log(f"({i+1}/{len(symbols)}) Successfully processed [bold cyan]{symbol}[/bold cyan] (from cache: {from_cache})")
+        else:
+            console.log(f"({i+1}/{len(symbols)}) [yellow]Skipping {symbol} due to data issues.[/yellow]")
 
     if not all_data:
         console.log("[bold red]Failed to prepare data for any symbol. Exiting.[/bold red]")
         return
 
-    console.log("\nGenerating signals using consensus filter...")
+    console.log("\nGenerating signals from prepared data...")
     for symbol, base_data in all_data.items():
         if base_data is None: continue
 
@@ -112,7 +117,7 @@ def run_scan(backtester, symbols, limit):
 
     backtester.close_remaining_trades(all_data)
 
-if __name__ == "__main__":
+async def main():
     parser = argparse.ArgumentParser(description="Binance Futures Market Scanner Backtester")
     parser.add_argument("--limit", type=int, default=1500, help="Number of 5m candles to backtest per symbol")
     parser.add_argument("--max_symbols", type=int, default=50, help="Maximum number of symbols to scan (sorted by volume)")
@@ -145,7 +150,7 @@ if __name__ == "__main__":
                 console.log("Koneksi async sementara ditutup.")
 
     # Jalankan fungsi async menggunakan asyncio.run() yang modern dan aman
-    all_symbols = asyncio.run(fetch_symbols_async())
+    all_symbols = await fetch_symbols_async()
 
     backtester = PortfolioBacktester(initial_balance=CONFIG["account_balance"])
 
@@ -161,6 +166,9 @@ if __name__ == "__main__":
 
     symbols_to_scan = all_symbols[:args.max_symbols]
 
-    run_scan(backtester, symbols=symbols_to_scan, limit=args.limit)
+    await run_scan(backtester, symbols=symbols_to_scan, limit=args.limit)
     backtester.get_results(args=args)
     backtester.get_results_with_realism_report(args=args)
+
+if __name__ == "__main__":
+    asyncio.run(main())
