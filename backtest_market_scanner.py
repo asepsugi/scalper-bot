@@ -79,6 +79,9 @@ async def run_scan(backtester, symbols, limit):
         signals_df = df_consensus.dropna(subset=['signal'])
         if not signals_df.empty:
             all_signals.extend(signals_df.reset_index().to_dict('records'))
+        else:
+            # PERBAIKAN: Tambahkan log jika tidak ada sinyal konsensus yang ditemukan untuk simbol ini
+            console.log(f"[grey50]No consensus signal for {symbol}. Check strategy filters or data integrity (e.g., missing SUPERTd, ADX).[/grey50]")
 
     if not all_signals:
         console.log("[bold red]No signals found across any symbols.[/bold red]")

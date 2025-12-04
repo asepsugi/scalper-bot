@@ -32,7 +32,8 @@ def prepare_data(df_signal, df_trend_15m, df_trend_1h):
         '15m': {
             f"RSI_{CONFIG['rsi_period']}": 'rsi_15m',
             f"EMA_{CONFIG['ema_period']}": 'trend_ema_15m',
-            'EMA_200': 'trend_ema_200_15m'
+            'EMA_200': 'trend_ema_200_15m',
+            'SUPERTd_10_3.0': 'supertrend_15m' # PERBAIKAN: Secara eksplisit bawa SuperTrend dari TF 15m
         },
         '1h': {
             f"RSI_{CONFIG['rsi_period']}": 'rsi_1h',

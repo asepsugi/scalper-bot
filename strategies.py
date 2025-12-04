@@ -283,21 +283,30 @@ def signal_version_B1(df):
 
     # Regime Detection
     is_trending = (adx > params.get("adx_trending_threshold", 22))
+    is_ranging = (adx < params.get("adx_ranging_threshold", 20))
     is_volatile = (atr_delta > params.get("atr_delta_volatile_threshold", 2.0))
 
     # Trend Following Setup (for trending markets)
-    long_signal = (df['close'] > df['trend_ema_15m']) & \
+    long_trend = (df['close'] > df['trend_ema_15m']) & \
                  (df['rsi_15m'] > params.get("rsi_trending_long", 50)) & \
                  (df['volume'] > df['VOL_20'] * params.get("volume_ratio", 1.05)) & \
                  (supertrend_direction == 1) # Gabung dengan SuperTrend
-    short_signal = (df['close'] < df['trend_ema_15m']) & \
+    short_trend = (df['close'] < df['trend_ema_15m']) & \
                   (df['rsi_15m'] < params.get("rsi_trending_short", 50)) & \
                   (df['volume'] > df['VOL_20'] * params.get("volume_ratio", 1.05)) & \
                   (supertrend_direction == -1) # Gabung dengan SuperTrend
     
-    # Terapkan filter tren
-    long_signal = long_signal & is_trending
-    short_signal = short_signal & is_trending
+    # --- PERBAIKAN: Aktifkan kembali Ranging Mode ---
+    long_range = (df['rsi_15m'] < 40) & (supertrend_direction == 1)  # Simple bounce
+    short_range = (df['rsi_15m'] > 60) & (supertrend_direction == -1) # Symmetric bounce
+
+    # Gabungkan sinyal berdasarkan rezim pasar
+    long_signal = pd.Series(False, index=df.index)
+    short_signal = pd.Series(False, index=df.index)
+    long_signal.loc[is_trending] = long_trend.loc[is_trending]
+    long_signal.loc[is_ranging] = long_range.loc[is_ranging]
+    short_signal.loc[is_trending] = short_trend.loc[is_trending]
+    short_signal.loc[is_ranging] = short_range.loc[is_ranging]
     
     # Filter Baru: Hanya trade saat volatilitas di atas rata-rata
     atr_col = 'ATRr_10'
@@ -537,12 +546,13 @@ STRATEGY_CONFIG = {
     
     "AdaptiveTrendRide(A3)": {
         "function": signal_version_A3,
-        "weight": 0.70  # Bobot utama
-    },
-    "SmartRegimeScalper(B1)": {
-        "function": signal_version_B1,
-        "weight": 0.30  # Standard weight
+        "weight": 0.80  # Bobot utama
     }
+    # ,
+    # "SmartRegimeScalper(B1)": {
+    #     "function": signal_version_B1,
+    #     "weight": 0.50  # Standard weight
+    # }
     # ,
     # "HybridScalper": {
     #     "function": signal_version_HYBRID_SCALPER,

@@ -56,10 +56,10 @@ CONFIG = {
             "sl_base_multiplier": 2.2,
             "sl_atr_pct_scaler": 0.3,
             "rr_ratio": 1.8,
-            "volume_ratio": 1.05,
-            "adx_threshold": 18,
-            "not_overextended_pct": 0.009,
-            "volatility_median_window": 100,
+            "volume_ratio": 0.9,
+            "adx_threshold": 16,
+            "not_overextended_pct": 0.015,
+            "volatility_median_window": 50,
             "wick_filter_atr_multiplier": 2.0, # Filter candle sumbu panjang
             "use_or_logic_for_filters": True, # ADX OR wick OK → sinyal lewat
             "enable_wick_filter": False,
@@ -67,7 +67,8 @@ CONFIG = {
         },
         "B1": {
             "adx_trending_threshold": 18,
-            "atr_delta_volatile_threshold": 2.0,
+            "adx_ranging_threshold": 22, # Aktifkan kembali untuk ranging mode
+            "atr_delta_volatile_threshold": 1.5,
             "rsi_trending_long": 50,
             "rsi_trending_short": 50,
             # PERBAIKAN: Beri ruang lebih untuk SL agar tidak kena noise
@@ -132,7 +133,7 @@ LIVE_TRADING_CONFIG = {
     "max_margin_usage_pct": 0.60,  # DOWN from 0.80 (more conservative)
     
     # CRITICAL FIX: Require stronger consensus
-    "consensus_ratio": 0.65,  # DOWN from 0.75 (Longgarkan untuk lebih banyak trade)
+    "consensus_ratio": 0.50,  # DOWN from 0.75 (Longgarkan untuk lebih banyak trade)
     
     # Circuit breaker - Tightened
     "circuit_breaker_multiplier": 1.3,  # DOWN from 1.5 (exit sooner)
@@ -157,7 +158,7 @@ LIVE_TRADING_CONFIG = {
     "max_position_scale": 1.5,
 
     # NEW: Daily trade limit
-    "max_trades_per_day": 12 # Batasi jumlah trade per hari
+    "max_trades_per_day": 20 # Batasi jumlah trade per hari
 }
 
 # ============================================================================
@@ -198,8 +199,8 @@ EXECUTION = {
     ],
     "trailing": {
         "enabled": True,
-        "trigger_rr": 5.5,
-        "distance_atr": 2.5,        # Sangat longgar, biar rider beneran ride
+        "trigger_rr": 1.8,
+        "distance_atr": 1.5,        # Sangat longgar, biar rider beneran ride
         "check_interval_seconds": 5
     }
 }
