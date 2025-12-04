@@ -190,13 +190,47 @@ def signal_version_A3(df):
     
     # --- PERBAIKAN: Tambahkan filter untuk candle dengan sumbu (wick) yang sangat panjang ---
     # Ini membantu menghindari entry pada candle stop-hunt atau trap.
-    candle_range = df['high'] - df['low']
-    avg_atr = df[atr_col].rolling(20).mean()
-    wick_filter_multiplier = params.get("wick_filter_atr_multiplier", 3.0)
-    no_large_wick_candle = candle_range < (avg_atr * wick_filter_multiplier)
+    if params.get("enable_wick_filter", False):
+        candle_range = df['high'] - df['low']
+        avg_atr = df[atr_col].rolling(20).mean()
+        wick_filter_multiplier = params.get("wick_filter_atr_multiplier", 3.0)
+        no_large_wick_candle = candle_range < (avg_atr * wick_filter_multiplier)
+    else:
+        no_large_wick_candle = pd.Series(True, index=df.index)
 
-    long_signal = base_long & volume_filter & adx_filter & not_overextended & volatility_filter & no_large_wick_candle
-    short_signal = base_short & volume_filter & adx_filter & not_overextended & volatility_filter & no_large_wick_candle
+    # --- PERBAIKAN: Logika filter dinamis (AND/OR) ---
+    use_or_logic = params.get("use_or_logic_for_filters", False)
+    if use_or_logic:
+        # Jika salah satu dari ADX atau filter sumbu terpenuhi, sinyal lolos
+        combined_main_filter = adx_filter | no_large_wick_candle
+    else:
+        # Logika default: semua filter harus terpenuhi
+        combined_main_filter = adx_filter & no_large_wick_candle
+
+    long_signal = base_long & volume_filter & not_overextended & volatility_filter & combined_main_filter
+    short_signal = base_short & volume_filter & not_overextended & volatility_filter & combined_main_filter
+
+    # --- FITUR BARU: Debug Mode ---
+    if params.get("debug_mode", False) and not df.empty:
+        last_idx = df.index[-1]
+        # Cek jika ada sinyal dasar, tapi sinyal final gagal
+        if (base_long.loc[last_idx] or base_short.loc[last_idx]) and not (long_signal.loc[last_idx] or short_signal.loc[last_idx]):
+            reasons = []
+            if not volume_filter.loc[last_idx]:
+                reasons.append("VolumeFilter")
+            if not not_overextended.loc[last_idx]:
+                reasons.append("Overextended")
+            if not volatility_filter.loc[last_idx]:
+                reasons.append("VolatilityFilter")
+            if not combined_main_filter.loc[last_idx]:
+                # Beri detail lebih untuk filter gabungan
+                if not adx_filter.loc[last_idx]:
+                    reasons.append(f"ADX < {params.get('adx_threshold', 22)}")
+                if params.get("enable_wick_filter", False) and not no_large_wick_candle.loc[last_idx]:
+                    reasons.append("WickFilter")
+            
+            if reasons:
+                print(f"DEBUG [A3]: Signal filtered on last candle. Reasons: {', '.join(reasons)}")
 
     return long_signal, short_signal, exit_params
 
@@ -266,23 +300,59 @@ def signal_version_B1(df):
     volatility_filter = df[atr_col] > df[atr_col].rolling(volatility_window).median()
 
     # --- PERBAIKAN: Tambahkan filter untuk candle dengan sumbu (wick) yang sangat panjang ---
-    candle_range = df['high'] - df['low']
-    avg_atr = df[atr_col].rolling(20).mean()
-    wick_filter_multiplier = params.get("wick_filter_atr_multiplier", 3.0)
-    no_large_wick_candle = candle_range < (avg_atr * wick_filter_multiplier)
+    if params.get("enable_wick_filter", False):
+        candle_range = df['high'] - df['low']
+        avg_atr = df[atr_col].rolling(20).mean()
+        wick_filter_multiplier = params.get("wick_filter_atr_multiplier", 3.0)
+        no_large_wick_candle = candle_range < (avg_atr * wick_filter_multiplier)
+    else:
+        no_large_wick_candle = pd.Series(True, index=df.index)
+
+    # --- PERBAIKAN: Logika filter dinamis (AND/OR) ---
+    use_or_logic = params.get("use_or_logic_for_filters", False)
+    if use_or_logic:
+        # Untuk B1, filter utamanya adalah is_trending dan no_large_wick
+        combined_main_filter = is_trending | no_large_wick_candle
+    else:
+        combined_main_filter = is_trending & no_large_wick_candle
 
     # Filter out extreme volatility AND low volatility
-    long_signal = long_signal & ~is_volatile & volatility_filter & no_large_wick_candle
-    short_signal = short_signal & ~is_volatile & volatility_filter & no_large_wick_candle
+    long_signal = long_signal & ~is_volatile & volatility_filter & combined_main_filter
+    short_signal = short_signal & ~is_volatile & volatility_filter & combined_main_filter
 
     # --- PERBAIKAN: Tambahkan filter volume & volatilitas dinamis ---
     # Sinyal hanya valid jika volume dan ATR saat ini lebih tinggi dari rata-rata 20 candle terakhir.
     vol_ma20 = df['volume'].rolling(20).mean()
     atr_ma20 = df['ATRr_10'].rolling(20).mean()
 
+    volume_mult = params.get("volume_ma_multiplier", 1.2)
+    atr_mult = params.get("atr_ma_multiplier", 1.1)
+
     # Terapkan filter ke sinyal yang sudah ada
-    long_signal = long_signal & (df['volume'] > 1.4 * vol_ma20) & (df['ATRr_10'] > 1.3 * atr_ma20)
-    short_signal = short_signal & (df['volume'] > 1.4 * vol_ma20) & (df['ATRr_10'] > 1.3 * atr_ma20)
+    long_signal = long_signal & (df['volume'] > volume_mult * vol_ma20) & (df['ATRr_10'] > atr_mult * atr_ma20)
+    short_signal = short_signal & (df['volume'] > volume_mult * vol_ma20) & (df['ATRr_10'] > atr_mult * atr_ma20)
+
+    # --- FITUR BARU: Debug Mode ---
+    if params.get("debug_mode", False) and not df.empty:
+        last_idx = df.index[-1]
+        # Cek jika ada sinyal dasar, tapi sinyal final gagal
+        base_signal_exists = (long_signal.loc[last_idx] or short_signal.loc[last_idx])
+        final_signal_exists = (long_signal.loc[last_idx] or short_signal.loc[last_idx])
+
+        if base_signal_exists and not final_signal_exists:
+            reasons = []
+            if is_volatile.loc[last_idx]:
+                reasons.append("IsVolatile")
+            if not volatility_filter.loc[last_idx]:
+                reasons.append("VolatilityFilter")
+            if not combined_main_filter.loc[last_idx]:
+                if not is_trending.loc[last_idx]:
+                    reasons.append(f"ADX < {params.get('adx_trending_threshold', 22)}")
+                if params.get("enable_wick_filter", False) and not no_large_wick_candle.loc[last_idx]:
+                    reasons.append("WickFilter")
+            
+            if reasons:
+                print(f"DEBUG [B1]: Signal filtered on last candle. Reasons: {', '.join(reasons)}")
 
     exit_params = {
         'sl_multiplier': sl_multiplier,
@@ -462,11 +532,11 @@ STRATEGY_CONFIG = {
     
     "AdaptiveTrendRide(A3)": {
         "function": signal_version_A3,
-        "weight": 0.00  # Bobot utama
+        "weight": 0.70  # Bobot utama
     },
     "SmartRegimeScalper(B1)": {
         "function": signal_version_B1,
-        "weight": 1.00  # Standard weight
+        "weight": 0.30  # Standard weight
     }
     # ,
     # "HybridScalper": {

@@ -28,7 +28,7 @@ CONFIG = {
     "rsi_overbought": 65,
     
     # CRITICAL FIX: Tighter ATR for scalping
-    "atr_period": 30,  # PERBAIKAN: Naikkan periode ATR untuk baseline volatilitas yang lebih stabil
+    "atr_period": 14,  # PERBAIKAN: Naikkan periode ATR untuk baseline volatilitas yang lebih stabil
     
     "body_strength_threshold": 0.6,
     "atr_volatility_threshold": 0.0005,
@@ -53,27 +53,35 @@ CONFIG = {
     "strategy_params": {
         "A3": {
             # PERBAIKAN: Beri ruang lebih untuk SL agar tidak kena noise
-            "sl_base_multiplier": 3.0,
+            "sl_base_multiplier": 2.2,
             "sl_atr_pct_scaler": 0.3,
             "rr_ratio": 1.8,
             "volume_ratio": 1.05,
-            "adx_threshold": 22,
+            "adx_threshold": 18,
             "not_overextended_pct": 0.009,
             "volatility_median_window": 100,
-            "wick_filter_atr_multiplier": 3.0 # Filter candle sumbu panjang
+            "wick_filter_atr_multiplier": 2.0, # Filter candle sumbu panjang
+            "use_or_logic_for_filters": True, # ADX OR wick OK → sinyal lewat
+            "enable_wick_filter": False,
+            "debug_mode": True  # Log kenapa sinyal None (e.g., "Skipped: ADX=17 < 18")
         },
         "B1": {
-            "adx_trending_threshold": 30,
+            "adx_trending_threshold": 18,
             "atr_delta_volatile_threshold": 2.0,
             "rsi_trending_long": 50,
             "rsi_trending_short": 50,
             # PERBAIKAN: Beri ruang lebih untuk SL agar tidak kena noise
-            "sl_base_multiplier": 3.0,
+            "sl_base_multiplier": 2.2,
             "sl_atr_pct_scaler": 0.3,
             "rr_ratio": 2.0,
             "volume_ratio": 1.05,
             "volatility_median_window": 100,
-            "wick_filter_atr_multiplier": 3.0 # Filter candle sumbu panjang
+            "wick_filter_atr_multiplier": 2.0, # Filter candle sumbu panjang
+            "volume_ma_multiplier": 1.0, # Trade kalau vol > 1.0x MA20
+            "atr_ma_multiplier": 1.1, # Trade kalau ATR > 1.1x MA20
+            "use_or_logic_for_filters": True, # ADX OR wick OK → sinyal lewat
+            "enable_wick_filter": False,
+            "debug_mode": True  # Log kenapa sinyal None
         }
     },
 
@@ -99,7 +107,7 @@ ENTRY_LOGIC = {
     "enabled": True, # Aktifkan/nonaktifkan seluruh logika ini
 
     # --- Kondisi Deteksi ---
-    "continuation_adx_threshold": 25,
+    "continuation_adx_threshold": 15,
     "continuation_volume_spike_ratio": 1.5, # Volume > 1.5x rata-rata
     "pullback_rsi_overbought": 70,
     "pullback_rsi_oversold": 30,
@@ -115,7 +123,7 @@ ENTRY_LOGIC = {
     "continuation_risk_pct": 0.002, # Risiko 0.2% untuk entry agresif
     "pullback_risk_pct": 0.004,     # Risiko 0.4% untuk entry pullback
 
-    "market_order_adx_threshold": 30 # Gunakan market order jika ADX > 30 (tren sangat kuat)
+    "market_order_adx_threshold": 18 # Gunakan market order jika ADX > 30 (tren sangat kuat)
 }
 
 LIVE_TRADING_CONFIG = {
@@ -176,14 +184,14 @@ FEES = {
 
 SLIPPAGE = {
   "fixed": 0.0,         # Slippage absolut dalam unit harga (misal: $0.5)
-  "pct": 0.0015         # Slippage sebagai fraksi dari harga (misal: 0.0003 = 0.03%)
+  "pct": 0.001         # Slippage sebagai fraksi dari harga (misal: 0.0003 = 0.03%)
 }
 
 # Konfigurasi Eksekusi (Partial TP & Trailing Stop)
 EXECUTION = {
     "entry_order_type": "limit", # "limit" atau "market"
-    "limit_order_offset_pct": 0.002, # Offset untuk limit order (positif = sedikit mengejar harga)
-    "limit_order_expiration_candles": 5, # Setelah berapa candle, order limit di backtest dibatalkan
+    "limit_order_offset_pct": 0.0005, # Offset untuk limit order (positif = sedikit mengejar harga)
+    "limit_order_expiration_candles": 10, # Setelah berapa candle, order limit di backtest dibatalkan
     "partial_tps": [
         (5.0, 0.5),   # 50% baru keluar di 5 RR
         (10.0, 0.3),  # 30% di 10 RR
