@@ -1,7 +1,7 @@
 import pandas as pd
 from datetime import time
 import numpy as np
-from config import CONFIG
+from config import CONFIG, ENTRY_LOGIC
 
 from functools import wraps
 """
@@ -50,6 +50,87 @@ def validate_indicator_data(required_columns: list):
             return func(df, *args, **kwargs)
         return wrapper
     return decorator
+
+def determine_entry_profile(df_row):
+    """
+    Menganalisis candle terakhir untuk menentukan profil entry: PULLBACK, CONTINUATION, atau DEFAULT.
+    Mengembalikan dictionary berisi parameter eksekusi yang disesuaikan.
+    """
+    if not ENTRY_LOGIC.get("enabled", False):
+        return {'profile': 'DISABLED', 'offset_pct': EXECUTION.get("limit_order_offset_pct", 0.0002), 'risk_pct': CONFIG['risk_per_trade'], 'order_type': 'limit'}
+
+    # --- PERBAIKAN: Deteksi Kondisi Continuation (Harga Kuat) yang Disempurnakan ---
+    # 1. Cek Tren & Momentum Dasar
+    is_strong_trend = df_row.get(f"ADX_{CONFIG['atr_period']}", 0) > ENTRY_LOGIC['continuation_adx_threshold']
+    is_volume_spike = df_row.get('volume_ratio', 0) > ENTRY_LOGIC['continuation_volume_spike_ratio']
+    
+    # 2. Cek Konfirmasi dari Indikator Tambahan
+    # Harga di atas EMA/VWAP dengan slope naik
+    is_above_ma = df_row.get('close', 0) > df_row.get(f"EMA_{CONFIG['ema_period']}", 0) and \
+                  df_row.get(f"EMA_{CONFIG['ema_period']}", 0) > df_row.get(f"EMA_{CONFIG['ema_period']}", 0) # Simple slope check
+    # MACD crossover bullish dan histogram naik
+    is_macd_bull_cross = df_row.get('MACD_12_26_9', 0) > df_row.get('MACDs_12_26_9', 0) and \
+                         df_row.get('MACDh_12_26_9', 0) > df_row.get('prev_MACDh_12_26_9', -1)
+    # Stochastic kuat tanpa cross down
+    is_stoch_strong_bull = df_row.get('STOCHk_14_3_3', 0) > 80 and df_row.get('STOCHd_14_3_3', 0) > 80
+    is_stoch_strong_bear = df_row.get('STOCHk_14_3_3', 0) < 20 and df_row.get('STOCHd_14_3_3', 0) < 20
+
+    # 3. Gabungkan semua kondisi
+    is_bullish_continuation = is_strong_trend and is_volume_spike and is_above_ma and is_macd_bull_cross and is_stoch_strong_bull
+    is_bearish_continuation = is_strong_trend and is_volume_spike and not is_above_ma and not is_macd_bull_cross and is_stoch_strong_bear
+
+    if is_bullish_continuation or is_bearish_continuation:
+        order_type = 'market' if df_row.get(f"ADX_{CONFIG['atr_period']}", 0) > ENTRY_LOGIC['market_order_adx_threshold'] else 'limit'
+        return {
+            'profile': 'CONTINUATION',
+            'offset_pct': ENTRY_LOGIC['continuation_offset_pct'],
+            'risk_pct': ENTRY_LOGIC['continuation_risk_pct'],
+            'order_type': order_type
+        }
+
+    # --- Deteksi Kondisi Pullback ---
+    rsi_val = df_row.get(f"RSI_{CONFIG['rsi_period']}", 50)
+    is_rsi_overbought = rsi_val > ENTRY_LOGIC['pullback_rsi_overbought']
+    is_rsi_oversold = rsi_val < ENTRY_LOGIC['pullback_rsi_oversold']
+
+    # Cek MACD Divergence/Shrinking
+    hist = df_row.get('MACDh_12_26_9', 0)
+    prev_hist = df_row.get('prev_MACDh_12_26_9', 0) # Asumsi kolom ini akan dibuat
+    is_macd_shrinking = abs(hist) < abs(prev_hist) * (1 - ENTRY_LOGIC['pullback_macd_hist_shrink_pct'])
+
+    # --- PERBAIKAN: Tambahkan deteksi pullback menggunakan Bollinger Bands ---
+    # Cek apakah harga baru saja menyentuh band luar dan sekarang kembali ke tengah
+    bb_retrace_pct = ENTRY_LOGIC.get('pullback_bb_retrace_pct', 0.005)
+    # Pullback Bullish: Harga sentuh Upper Band, lalu turun kembali
+    is_bb_pullback_bull = (df_row.get('high', 0) >= df_row.get('BBU_20_2.0', np.inf)) and \
+                          (df_row.get('close', 0) < df_row.get('BBU_20_2.0', np.inf) * (1 - bb_retrace_pct))
+    # Pullback Bearish: Harga sentuh Lower Band, lalu naik kembali
+    is_bb_pullback_bear = (df_row.get('low', 0) <= df_row.get('BBL_20_2.0', 0)) and \
+                          (df_row.get('close', 0) > df_row.get('BBL_20_2.0', 0) * (1 + bb_retrace_pct))
+
+    # --- Logika Pullback yang Disempurnakan ---
+    # Kondisi terpenuhi jika (RSI & MACD) ATAU (Bollinger Bands)
+
+    # Kondisi Pullback Bullish (dalam tren naik, harga koreksi turun)
+    if df_row.get('trend') == 'UPTREND' and ((is_rsi_overbought and is_macd_shrinking) or is_bb_pullback_bull):
+        return {
+            'profile': 'PULLBACK_BULL',
+            'offset_pct': ENTRY_LOGIC['pullback_offset_pct'],
+            'risk_pct': ENTRY_LOGIC['pullback_risk_pct'],
+            'order_type': 'limit'
+        }
+
+    # Kondisi Pullback Bearish (dalam tren turun, harga koreksi naik)
+    elif df_row.get('trend') == 'DOWNTREND' and ((is_rsi_oversold and is_macd_shrinking) or is_bb_pullback_bear):
+        return {
+            'profile': 'PULLBACK_BEAR',
+            'offset_pct': ENTRY_LOGIC['pullback_offset_pct'],
+            'risk_pct': ENTRY_LOGIC['pullback_risk_pct'],
+            'order_type': 'limit'
+        }
+
+    # --- PERBAIKAN: Default ke Market Order jika tidak ada profil yang cocok ---
+    return {'profile': 'DEFAULT', 'offset_pct': 0, 'risk_pct': CONFIG['risk_per_trade'], 'order_type': 'market'}
 
 def signal_version_A3(df):
     """
@@ -106,9 +187,16 @@ def signal_version_A3(df):
     atr_col = 'ATRr_10'
     volatility_window = params.get("volatility_median_window", 100)
     volatility_filter = df[atr_col] > df[atr_col].rolling(volatility_window).median()
+    
+    # --- PERBAIKAN: Tambahkan filter untuk candle dengan sumbu (wick) yang sangat panjang ---
+    # Ini membantu menghindari entry pada candle stop-hunt atau trap.
+    candle_range = df['high'] - df['low']
+    avg_atr = df[atr_col].rolling(20).mean()
+    wick_filter_multiplier = params.get("wick_filter_atr_multiplier", 3.0)
+    no_large_wick_candle = candle_range < (avg_atr * wick_filter_multiplier)
 
-    long_signal = base_long & volume_filter & adx_filter & not_overextended & volatility_filter
-    short_signal = base_short & volume_filter & adx_filter & not_overextended & volatility_filter
+    long_signal = base_long & volume_filter & adx_filter & not_overextended & volatility_filter & no_large_wick_candle
+    short_signal = base_short & volume_filter & adx_filter & not_overextended & volatility_filter & no_large_wick_candle
 
     return long_signal, short_signal, exit_params
 
@@ -156,41 +244,45 @@ def signal_version_B1(df):
 
     # Regime Detection
     is_trending = (adx > params.get("adx_trending_threshold", 22))
-    is_ranging = (adx < params.get("adx_ranging_threshold", 20)) # Disable B1 di ranging
     is_volatile = (atr_delta > params.get("atr_delta_volatile_threshold", 2.0))
 
     # Trend Following Setup (for trending markets)
-    long_trend = (df['close'] > df['trend_ema_15m']) & \
+    long_signal = (df['close'] > df['trend_ema_15m']) & \
                  (df['rsi_15m'] > params.get("rsi_trending_long", 50)) & \
                  (df['volume'] > df['VOL_20'] * params.get("volume_ratio", 1.05)) & \
                  (supertrend_direction == 1) # Gabung dengan SuperTrend
-    short_trend = (df['close'] < df['trend_ema_15m']) & \
+    short_signal = (df['close'] < df['trend_ema_15m']) & \
                   (df['rsi_15m'] < params.get("rsi_trending_short", 50)) & \
                   (df['volume'] > df['VOL_20'] * params.get("volume_ratio", 1.05)) & \
                   (supertrend_direction == -1) # Gabung dengan SuperTrend
-
-    # Mean Reversion Setup (for ranging markets)
-    long_range = pd.Series(False, index=df.index) # Dinonaktifkan sesuai permintaan
-    short_range = pd.Series(False, index=df.index) # Dinonaktifkan sesuai permintaan
-
-    # Combine based on regime
-    long_signal = pd.Series(False, index=df.index)
-    short_signal = pd.Series(False, index=df.index)
     
-    long_signal.loc[is_trending] = long_trend.loc[is_trending]
-    long_signal.loc[is_ranging] = long_range.loc[is_ranging]
-    
-    short_signal.loc[is_trending] = short_trend.loc[is_trending]
-    short_signal.loc[is_ranging] = short_range.loc[is_ranging]
+    # Terapkan filter tren
+    long_signal = long_signal & is_trending
+    short_signal = short_signal & is_trending
     
     # Filter Baru: Hanya trade saat volatilitas di atas rata-rata
     atr_col = 'ATRr_10'
     volatility_window = params.get("volatility_median_window", 100)
     volatility_filter = df[atr_col] > df[atr_col].rolling(volatility_window).median()
 
+    # --- PERBAIKAN: Tambahkan filter untuk candle dengan sumbu (wick) yang sangat panjang ---
+    candle_range = df['high'] - df['low']
+    avg_atr = df[atr_col].rolling(20).mean()
+    wick_filter_multiplier = params.get("wick_filter_atr_multiplier", 3.0)
+    no_large_wick_candle = candle_range < (avg_atr * wick_filter_multiplier)
+
     # Filter out extreme volatility AND low volatility
-    long_signal = long_signal & ~is_volatile & volatility_filter
-    short_signal = short_signal & ~is_volatile & volatility_filter
+    long_signal = long_signal & ~is_volatile & volatility_filter & no_large_wick_candle
+    short_signal = short_signal & ~is_volatile & volatility_filter & no_large_wick_candle
+
+    # --- PERBAIKAN: Tambahkan filter volume & volatilitas dinamis ---
+    # Sinyal hanya valid jika volume dan ATR saat ini lebih tinggi dari rata-rata 20 candle terakhir.
+    vol_ma20 = df['volume'].rolling(20).mean()
+    atr_ma20 = df['ATRr_10'].rolling(20).mean()
+
+    # Terapkan filter ke sinyal yang sudah ada
+    long_signal = long_signal & (df['volume'] > 1.4 * vol_ma20) & (df['ATRr_10'] > 1.3 * atr_ma20)
+    short_signal = short_signal & (df['volume'] > 1.4 * vol_ma20) & (df['ATRr_10'] > 1.3 * atr_ma20)
 
     exit_params = {
         'sl_multiplier': sl_multiplier,
@@ -370,11 +462,11 @@ STRATEGY_CONFIG = {
     
     "AdaptiveTrendRide(A3)": {
         "function": signal_version_A3,
-        "weight": 0.70  # Bobot utama
+        "weight": 0.00  # Bobot utama
     },
     "SmartRegimeScalper(B1)": {
         "function": signal_version_B1,
-        "weight": 0.30  # Standard weight
+        "weight": 1.00  # Standard weight
     }
     # ,
     # "HybridScalper": {

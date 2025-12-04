@@ -8,7 +8,7 @@ from pathlib import Path
 from config import CONFIG, FEES, SLIPPAGE, LEVERAGE_MAP, LIVE_TRADING_CONFIG, BACKTEST_REALISM_CONFIG, EXECUTION
 from utils.common_utils import get_dynamic_risk_params
 from indicators import fetch_binance_data_sync, calculate_indicators
-from utils.data_preparer import prepare_data
+from utils.data_preparer import prepare_data # type: ignore
 from strategies import STRATEGY_CONFIG
 from rich.table import Table
 
@@ -137,11 +137,19 @@ class PortfolioBacktester:
         else: # limit order
             base_price = order_details['limit_price']
             entry_fee_rate = FEES['maker']
-        
+
         entry_price = base_price * (1 + SLIPPAGE['pct'] if order_details['direction'] == 'LONG' else 1 - SLIPPAGE['pct'])
         entry_fee = order_details['position_size_usd'] * entry_fee_rate
 
+        # --- PERBAIKAN KRUSIAL: Hitung ulang SL/TP dari ACTUAL entry price ---
+        stop_loss_dist = order_details['stop_loss_dist']
+        rr_ratio = order_details['rr_ratio']
+        sl_price = entry_price - stop_loss_dist if order_details['direction'] == 'LONG' else entry_price + stop_loss_dist
+        tp_price = entry_price + (stop_loss_dist * rr_ratio) if order_details['direction'] == 'LONG' else entry_price - (stop_loss_dist * rr_ratio)
+        # --------------------------------------------------------------------
+
         self.trade_id_counter += 1
+
         console.log(
             f"[green]Opening trade {self.trade_id_counter} on {symbol} ({order_details['strategy']}). "
             f"Limit: {order_details['limit_price']:.5f}, Entry (w/ slippage): {entry_price:.5f}[/green]"
@@ -149,8 +157,8 @@ class PortfolioBacktester:
 
         self.active_positions[symbol] = {
             'id': self.trade_id_counter, 'entry_time': fill_time, 'entry_price': entry_price,
-            'direction': order_details['direction'], 'sl_price': order_details['sl_price'],
-            'initial_sl': order_details['initial_sl'], 'tp_price': order_details['tp_price'],
+            'direction': order_details['direction'], 'sl_price': sl_price, # Gunakan SL/TP yang baru dihitung
+            'initial_sl': sl_price, 'tp_price': tp_price,
             'position_size_usd': order_details['position_size_usd'], 'margin_used': order_details['margin_used'],
             'strategy': order_details['strategy'], 'entry_fee': entry_fee,
         }
@@ -159,7 +167,8 @@ class PortfolioBacktester:
         self.active_positions[symbol]['remaining_position_usd'] = order_details['position_size_usd']
         self.active_positions[symbol]['partial_tp_targets'] = []
 
-        risk_distance = abs(entry_price - order_details['initial_sl'])
+        # PERBAIKAN: Gunakan stop_loss_dist yang sudah dihitung, bukan initial_sl yang sudah tidak ada
+        risk_distance = order_details['stop_loss_dist']
         for rr_multiplier, fraction in EXECUTION['partial_tps']:
             if risk_distance > 0:
                 tp_price_target = entry_price + (risk_distance * rr_multiplier) if order_details['direction'] == 'LONG' else entry_price - (risk_distance * rr_multiplier)
@@ -243,20 +252,34 @@ class PortfolioBacktester:
         signal_price = signal_row['close']
         direction = signal_row['signal']
         atr_val = signal_row[f"ATRr_{CONFIG['atr_period']}"]
-
-        limit_offset_pct = 0.001
-        limit_price = signal_price * (1 - limit_offset_pct) if direction == 'LONG' else signal_price * (1 + limit_offset_pct)
-        expiration_candles = 10
+        
+        # --- PERBAIKAN: Tentukan profil entry dinamis ---
+        from strategies import determine_entry_profile
+        # Buat kolom MACD sebelumnya untuk deteksi
+        full_data['prev_MACDh_12_26_9'] = full_data['MACDh_12_26_9'].shift(1)
+        signal_row_with_prev = full_data.loc[signal_time]
+        entry_profile = determine_entry_profile(signal_row_with_prev)
+        
+        # Ambil parameter dari profil yang terdeteksi
+        limit_offset_pct = entry_profile['offset_pct']
+        risk_for_this_trade = entry_profile['risk_pct']
+        entry_order_type = entry_profile['order_type']
+        
+        limit_price = signal_price * (1 + limit_offset_pct) if direction == 'LONG' else signal_price * (1 - limit_offset_pct)
+        expiration_candles = EXECUTION.get("limit_order_expiration_candles", 5)
 
         sl_multiplier = exit_params.get('sl_multiplier', 1.5)
         rr_ratio = exit_params.get('rr_ratio', 1.5)
 
         if isinstance(sl_multiplier, (pd.Series, np.ndarray)):
-            sl_multiplier = sl_multiplier[full_data.index.get_loc(signal_time)]
+            # PERBAIKAN: Gunakan .iloc untuk akses posisi integer yang eksplisit
+            sl_multiplier = sl_multiplier.iloc[full_data.index.get_loc(signal_time)]
         if isinstance(rr_ratio, (pd.Series, np.ndarray)):
-            rr_ratio = rr_ratio[full_data.index.get_loc(signal_time)]
+            # PERBAIKAN: Gunakan .iloc untuk akses posisi integer yang eksplisit
+            rr_ratio = rr_ratio.iloc[full_data.index.get_loc(signal_time)]
 
-        risk_amount_usd = self.balance * current_risk_per_trade
+        # Gunakan risiko yang sudah disesuaikan
+        risk_amount_usd = self.balance * risk_for_this_trade
         stop_loss_dist = atr_val * sl_multiplier
         
         if limit_price <= 0: return
@@ -275,29 +298,24 @@ class PortfolioBacktester:
         if (total_margin_used + margin_for_this_trade) > self.balance:
             return
 
-        # --- PERBAIKAN: Cek tipe order dari konfigurasi SEBELUM logging ---
-        entry_order_type = EXECUTION.get("entry_order_type", "limit")
-
         # --- PERBAIKAN: Sesuaikan pesan log berdasarkan tipe order ---
         if entry_order_type == "market":
             # Untuk market order, "limit_price" sebenarnya adalah harga referensi saat sinyal
-            console.log(f"[blue]Preparing MARKET {direction} order for {symbol} at signal price {signal_price:.5f} (Leverage: {leverage_for_symbol}x)[/blue]")
+            console.log(f"[blue]({entry_profile['profile']}) Preparing MARKET {direction} order for {symbol} at signal price {signal_price:.5f}[/blue]")
         else:
-            console.log(f"[blue]Creating pending LIMIT {direction} order for {symbol} at limit price {limit_price:.5f} (Leverage: {leverage_for_symbol}x)[/blue]")
+            console.log(f"[blue]({entry_profile['profile']}) Creating pending LIMIT {direction} order for {symbol} at limit price {limit_price:.5f}[/blue]")
 
-        stop_loss_price = limit_price - stop_loss_dist if direction == 'LONG' else limit_price + stop_loss_dist
-        take_profit_price = limit_price + (stop_loss_dist * rr_ratio) if direction == 'LONG' else limit_price - (stop_loss_dist * rr_ratio)
-        
         timeframe_duration = pd.to_timedelta(CONFIG['timeframe_signal'])
         expiration_time = signal_time + (timeframe_duration * expiration_candles)
         
         order_details = {
             'creation_time': signal_time, 'expiration_time': expiration_time,
             'limit_price': limit_price, 'direction': direction,
-            'sl_price': stop_loss_price, 'initial_sl': stop_loss_price,
-            'tp_price': take_profit_price, 'position_size_usd': position_size_usd,
+            'position_size_usd': position_size_usd,
             'margin_used': margin_for_this_trade, 'strategy': signal_row['strategy'],
-            'entry_order_type': entry_order_type # Simpan tipe order
+            'entry_order_type': entry_order_type,
+            # --- PERBAIKAN: Simpan jarak SL & RR, bukan harga absolut ---
+            'stop_loss_dist': stop_loss_dist, 'rr_ratio': rr_ratio
         }
 
         # --- PERBAIKAN: Langsung eksekusi jika market order ---

@@ -15,7 +15,7 @@ from indicators import fetch_binance_data, calculate_indicators
 from utils.common_utils import get_all_futures_symbols, get_dynamic_risk_params
 from utils.data_preparer import prepare_data
 from utils.telegram_notifier import TelegramNotifier
-from strategies import STRATEGY_CONFIG
+from strategies import STRATEGY_CONFIG, determine_entry_profile
 
 console = Console(log_path=False) # Nonaktifkan logging duplikat dari Rich
 notifier = TelegramNotifier(TELEGRAM['bot_token'], TELEGRAM['chat_id'])
@@ -290,32 +290,41 @@ class LiveTrader:
                     signal_price = latest_candle['close']
                     atr_val = latest_candle[f"ATRr_{CONFIG['atr_period']}"]
                     
-                    limit_offset_pct = 0.001
+                    # --- PERBAIKAN: Tentukan profil entry dinamis ---
+                    # Buat kolom MACD sebelumnya untuk deteksi
+                    base_data['prev_MACDh_12_26_9'] = base_data['MACDh_12_26_9'].shift(1)
+                    latest_candle_with_prev = base_data.iloc[-1]
+                    entry_profile = determine_entry_profile(latest_candle_with_prev)
+
+                    # Ambil parameter dari profil yang terdeteksi
+                    limit_offset_pct = entry_profile['offset_pct']
+                    risk_for_this_trade = entry_profile['risk_pct']
+                    entry_order_type = entry_profile['order_type']
+                    
                     limit_price_float = signal_price * (1 - limit_offset_pct) if final_signal == 'LONG' else signal_price * (1 + limit_offset_pct)
 
                     sl_multiplier = exit_params.get('sl_multiplier', 1.5)
                     rr_ratio = exit_params.get('rr_ratio', 1.5)
 
-                    if isinstance(sl_multiplier, (pd.Series, np.ndarray)): sl_multiplier = sl_multiplier[-1]
-                    if isinstance(rr_ratio, (pd.Series, np.ndarray)): rr_ratio = rr_ratio[-1]
+                    # PERBAIKAN: Gunakan .iloc untuk konsistensi dan praktik terbaik
+                    if isinstance(sl_multiplier, (pd.Series, np.ndarray)): sl_multiplier = sl_multiplier.iloc[-1]
+                    if isinstance(rr_ratio, (pd.Series, np.ndarray)): rr_ratio = rr_ratio.iloc[-1]
 
                     stop_loss_dist = atr_val * sl_multiplier
-                    sl_price_float = limit_price_float - stop_loss_dist if final_signal == 'LONG' else limit_price_float + stop_loss_dist
-                    tp_price_float = limit_price_float + (stop_loss_dist * rr_ratio) if final_signal == 'LONG' else limit_price_float - (stop_loss_dist * rr_ratio)
 
+                    # --- PERBAIKAN: Jangan hitung harga absolut SL/TP di sini ---
+                    # Kita hanya akan log harga entry yang ditargetkan. SL/TP akan dihitung setelah fill.
                     limit_price_str = self.exchange.price_to_precision(symbol, limit_price_float)
-                    sl_price_str = self.exchange.price_to_precision(symbol, sl_price_float)
-                    tp_price_str = self.exchange.price_to_precision(symbol, tp_price_float)
                     leverage = LEVERAGE_MAP.get(symbol, LEVERAGE_MAP.get("DEFAULT", 10))
 
-                    log_msg = f"SIGNAL_CONSENSUS: {final_signal} {symbol} {consensus_details} | ENTRY:{limit_price_str} TP:{tp_price_str} SL:{sl_price_str}"
+                    log_msg = f"SIGNAL_CONSENSUS ({entry_profile['profile']}): {final_signal} {symbol} {consensus_details} | Target Entry:{limit_price_str}"
                     console.log(f"[bold green]KONSENSUS SINYAL DITEMUKAN![/bold green] {log_msg}")
                     await self.log_event(log_msg)
                     
-                    notif_msg = (f"🔔 *Sinyal Konsensus: {final_signal} {symbol}*\n{consensus_details}\n\n"
-                                 f"Entry (Limit): `{limit_price_str}`\nStop Loss: `{sl_price_str}`\nTake Profit: `{tp_price_str}`\nLeverage: `{leverage}x`")
+                    notif_msg = (f"🔔 *Sinyal Konsensus ({entry_profile['profile']}): {final_signal} {symbol}*\n{consensus_details}\n\n"
+                                 f"Target Entry: `{limit_price_str}`\nLeverage: `{leverage}x`")
                     await notifier.send_message(notif_msg)
-                    await self.execute_trade_logic(symbol, final_signal, latest_candle, exit_params, strategy_name, limit_price_float, sl_price_float, tp_price_float)
+                    await self.execute_trade_logic(symbol, final_signal, latest_candle, exit_params, strategy_name, limit_price_float, stop_loss_dist, rr_ratio, risk_for_this_trade, entry_order_type)
 
             except KeyError as e:
                 console.log(f"[bold red]Error KeyError di signal_processor untuk {symbol}: Kolom {e} tidak ditemukan. Periksa 'prepare_data' dan 'strategies'.[/bold red]")
@@ -329,7 +338,7 @@ class LiveTrader:
             finally:
                 self.signal_queue.task_done()
 
-    async def execute_trade_logic(self, symbol, direction, candle, exit_params, strategy_name, limit_price_float, sl_price_float, tp_price_float):
+    async def execute_trade_logic(self, symbol, direction, candle, exit_params, strategy_name, limit_price_float, stop_loss_dist, rr_ratio, risk_for_this_trade, entry_order_type):
         """Menghitung parameter dan menempatkan order di bursa."""
         # --- FITUR BARU: Cek Drawdown Circuit Breaker ---
         if self.drawdown_cooldown_until and datetime.now() < self.drawdown_cooldown_until:
@@ -363,9 +372,8 @@ class LiveTrader:
             # Harga sudah dihitung di signal_processor, kita tinggal gunakan
             signal_price = candle['close'] # Harga saat sinyal terdeteksi
             
-            # Dapatkan kembali parameter risiko dinamis (sudah dihitung di processor, tapi lebih aman di sini juga)
-            risk_params = get_dynamic_risk_params(total_balance)
-            current_risk_per_trade = risk_params['risk_per_trade']
+            # Gunakan risiko yang sudah disesuaikan dari profil entry
+            current_risk_per_trade = risk_for_this_trade
 
             if free_balance < 5: # REVISI: Turunkan minimal balance ke $5
                 # REVISI: Tambahkan logging dan notifikasi untuk kegagalan ini.
@@ -387,7 +395,7 @@ class LiveTrader:
                 # ---------------------------------
                 return
 
-            stop_loss_pct = abs(limit_price_float - sl_price_float) / limit_price_float
+            stop_loss_pct = stop_loss_dist / limit_price_float
             risk_amount_usd = total_balance * current_risk_per_trade
 
             if stop_loss_pct == 0:
@@ -398,8 +406,8 @@ class LiveTrader:
                 # Tidak perlu notifikasi Telegram untuk error teknis ini.
                 return
 
-            # Gunakan leverage dinamis dari risk_params sebagai default
-            leverage = LEVERAGE_MAP.get(symbol, risk_params['default_leverage'])
+            risk_params = get_dynamic_risk_params(total_balance) # Tetap panggil untuk default leverage
+            leverage = LEVERAGE_MAP.get(symbol, risk_params.get('default_leverage', 10))
             position_size_usd = risk_amount_usd / stop_loss_pct
             margin_for_this_trade = position_size_usd / leverage
             amount = position_size_usd / signal_price # Jumlah koin
@@ -435,8 +443,6 @@ class LiveTrader:
             # Pembulatan sesuai aturan market
             amount = self.exchange.amount_to_precision(symbol, amount)
             limit_price_str = self.exchange.price_to_precision(symbol, limit_price_float)
-            sl_price_str = self.exchange.price_to_precision(symbol, sl_price_float)
-            tp_price_str = self.exchange.price_to_precision(symbol, tp_price_float)
 
             # 3. Eksekusi Order
             console.log(f"Mencoba menempatkan order untuk {symbol}...")
@@ -454,13 +460,17 @@ class LiveTrader:
             params = {}
             if not LIVE_TRADING_CONFIG.get("use_advanced_exit_logic", True):
                 # Mode Statis: Tempatkan SL/TP langsung di bursa
+                # PERBAIKAN: Hitung SL/TP absolut di sini, tepat sebelum mengirim order
+                sl_price_float = limit_price_float - stop_loss_dist if direction == 'LONG' else limit_price_float + stop_loss_dist
+                tp_price_float = limit_price_float + (stop_loss_dist * rr_ratio) if direction == 'LONG' else limit_price_float - (stop_loss_dist * rr_ratio)
+                sl_price_str = self.exchange.price_to_precision(symbol, sl_price_float)
+                tp_price_str = self.exchange.price_to_precision(symbol, tp_price_float)
                 params = {
                     'stopLoss': {'type': 'STOP_MARKET', 'triggerPrice': sl_price_str},
                     'takeProfit': {'type': 'TAKE_PROFIT_MARKET', 'triggerPrice': tp_price_str}
                 }
 
             # --- PERBAIKAN: Gunakan tipe order yang dapat dikonfigurasi ---
-            entry_order_type = EXECUTION.get("entry_order_type", "limit")
             if entry_order_type == "market":
                 # Untuk market order, kita tidak perlu harga limit
                 order = await self.exchange.create_order(symbol, 'market', side, amount, None, params)
@@ -469,12 +479,11 @@ class LiveTrader:
 
             # --- PERBAIKAN: Simpan state order (termasuk initial_sl) di open_limit_orders ---
             self.open_limit_orders[symbol] = {
-                'sl_price': sl_price_float,
-                'tp_price': tp_price_float,
-                'initial_sl': sl_price_float,
-                'entryPrice': limit_price_float, # Simpan harga entry yang diinginkan
+                # --- PERBAIKAN: Simpan jarak SL & RR, bukan harga absolut ---
+                'stop_loss_dist': stop_loss_dist,
+                'rr_ratio': rr_ratio,
                 'positionAmt': amount if side == 'buy' else -amount,
-                'strategy': strategy_name
+                'strategy': strategy_name,
             }
 
             console.log(f"[bold green]Order berhasil dibuat untuk {symbol}. ID: {order['id']}[/bold green]")
@@ -613,13 +622,22 @@ class LiveTrader:
                                 continue
 
                             # REVISI DEFINITIF: Gunakan metode standar 'fetch_position'.
-                            position_info = await self.exchange.fetch_position(symbol) # Metode standar sudah benar
+                            position_info = await self.exchange.fetch_position(symbol)
 
                             # --- PERBAIKAN: Gabungkan info dari bursa dengan state kustom kita ---
                             final_position_details = position_info['info']
                             final_position_details.update(custom_state) # Tambahkan sl_price, tp_price, initial_sl, dll.
+
+                            # --- PERBAIKAN KRUSIAL: Hitung SL/TP dari harga entry riil ---
+                            entry_price = float(final_position_details['entryPrice'])
+                            stop_loss_dist = final_position_details['stop_loss_dist']
+                            rr_ratio = final_position_details['rr_ratio']
+                            direction = "LONG" if float(final_position_details['positionAmt']) > 0 else "SHORT"
+                            final_position_details['sl_price'] = entry_price - stop_loss_dist if direction == "LONG" else entry_price + stop_loss_dist
+                            final_position_details['initial_sl'] = final_position_details['sl_price']
+                            final_position_details['tp_price'] = entry_price + (stop_loss_dist * rr_ratio) if direction == "LONG" else entry_price - (stop_loss_dist * rr_ratio)
+
                             self.active_positions[symbol_ccxt] = final_position_details
-                            
                             # --- FITUR BARU: Inisialisasi Multi-Level TP untuk Live ---
                             # Panggil fungsi baru untuk menghitung dan menyimpan target TP parsial
                             self.initialize_partial_tp_targets(symbol_ccxt)

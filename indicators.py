@@ -217,12 +217,16 @@ def calculate_indicators(df):
             # =========================================================================
             df.ta.rsi(length=CONFIG["rsi_period"], append=True)
             df.ta.willr(length=14, append=True)
+            # --- PERBAIKAN: Tambahkan Stochastic dan MACD sesuai permintaan ---
+            df.ta.stoch(k=14, d=3, smooth_k=3, append=True)
+            df.ta.macd(fast=12, slow=26, signal=9, append=True)
+            # ----------------------------------------------------------------
             df.ta.mfi(length=14, append=True)
             
             # =========================================================================
             # VOLATILITY INDICATORS
             # =========================================================================
-            df.ta.atr(length=10, append=True)
+            df.ta.atr(length=CONFIG["atr_period"], append=True)
             
             bbands = df.ta.bbands(length=20, std=2, append=True)
             if bbands is not None and not bbands.empty:

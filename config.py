@@ -28,7 +28,7 @@ CONFIG = {
     "rsi_overbought": 65,
     
     # CRITICAL FIX: Tighter ATR for scalping
-    "atr_period": 10,  # DOWN from 14 (faster response)
+    "atr_period": 30,  # PERBAIKAN: Naikkan periode ATR untuk baseline volatilitas yang lebih stabil
     
     "body_strength_threshold": 0.6,
     "atr_volatility_threshold": 0.0005,
@@ -52,25 +52,28 @@ CONFIG = {
     # =========================================================================
     "strategy_params": {
         "A3": {
-            "sl_base_multiplier": 1.0,
+            # PERBAIKAN: Beri ruang lebih untuk SL agar tidak kena noise
+            "sl_base_multiplier": 3.0,
             "sl_atr_pct_scaler": 0.3,
             "rr_ratio": 1.8,
             "volume_ratio": 1.05,
             "adx_threshold": 22,
             "not_overextended_pct": 0.009,
-            "volatility_median_window": 100
+            "volatility_median_window": 100,
+            "wick_filter_atr_multiplier": 3.0 # Filter candle sumbu panjang
         },
         "B1": {
-            "adx_trending_threshold": 22,
-            "adx_ranging_threshold": 20,
+            "adx_trending_threshold": 30,
             "atr_delta_volatile_threshold": 2.0,
             "rsi_trending_long": 50,
             "rsi_trending_short": 50,
-            "sl_base_multiplier": 1.0,
+            # PERBAIKAN: Beri ruang lebih untuk SL agar tidak kena noise
+            "sl_base_multiplier": 3.0,
             "sl_atr_pct_scaler": 0.3,
             "rr_ratio": 2.0,
             "volume_ratio": 1.05,
-            "volatility_median_window": 100
+            "volatility_median_window": 100,
+            "wick_filter_atr_multiplier": 3.0 # Filter candle sumbu panjang
         }
     },
 
@@ -87,6 +90,32 @@ CONFIG = {
         "ob_consecutive_candles": 2,
         "allow_contrarian_mode": False
     }
+}
+
+# ============================================================================
+# NEW: DYNAMIC ENTRY LOGIC CONFIGURATION
+# ============================================================================
+ENTRY_LOGIC = {
+    "enabled": True, # Aktifkan/nonaktifkan seluruh logika ini
+
+    # --- Kondisi Deteksi ---
+    "continuation_adx_threshold": 25,
+    "continuation_volume_spike_ratio": 1.5, # Volume > 1.5x rata-rata
+    "pullback_rsi_overbought": 70,
+    "pullback_rsi_oversold": 30,
+    "pullback_macd_hist_shrink_pct": 0.20, # Hist MACD mengecil 20% dari puncaknya
+    "pullback_bb_retrace_pct": 0.005, # Harga harus retrace 0.5% dari band luar
+
+    # --- Parameter Eksekusi ---
+    "continuation_offset_pct": 0.001,   # +0.1% (mengejar harga)
+    "pullback_offset_pct": -0.0015,     # -0.15% (menunggu pullback)
+    "default_offset_pct": 0.0002,       # Offset standar jika tidak terdeteksi
+
+    # --- Parameter Risiko Dinamis ---
+    "continuation_risk_pct": 0.002, # Risiko 0.2% untuk entry agresif
+    "pullback_risk_pct": 0.004,     # Risiko 0.4% untuk entry pullback
+
+    "market_order_adx_threshold": 30 # Gunakan market order jika ADX > 30 (tren sangat kuat)
 }
 
 LIVE_TRADING_CONFIG = {
@@ -147,12 +176,14 @@ FEES = {
 
 SLIPPAGE = {
   "fixed": 0.0,         # Slippage absolut dalam unit harga (misal: $0.5)
-  "pct": 0.0005         # Slippage sebagai fraksi dari harga (misal: 0.0003 = 0.03%)
+  "pct": 0.0015         # Slippage sebagai fraksi dari harga (misal: 0.0003 = 0.03%)
 }
 
 # Konfigurasi Eksekusi (Partial TP & Trailing Stop)
 EXECUTION = {
     "entry_order_type": "limit", # "limit" atau "market"
+    "limit_order_offset_pct": 0.002, # Offset untuk limit order (positif = sedikit mengejar harga)
+    "limit_order_expiration_candles": 5, # Setelah berapa candle, order limit di backtest dibatalkan
     "partial_tps": [
         (5.0, 0.5),   # 50% baru keluar di 5 RR
         (10.0, 0.3),  # 30% di 10 RR

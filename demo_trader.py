@@ -236,32 +236,32 @@ class DemoTrader:
                     signal_price = latest_candle['close']
                     atr_val = latest_candle[f"ATRr_{CONFIG['atr_period']}"]
                     
-                    limit_offset_pct = 0.001
+                    # --- PERBAIKAN: Gunakan offset yang dapat dikonfigurasi ---
+                    limit_offset_pct = EXECUTION.get("limit_order_offset_pct", 0.0002)
                     limit_price_float = signal_price * (1 - limit_offset_pct) if final_signal == 'LONG' else signal_price * (1 + limit_offset_pct)
 
                     sl_multiplier = exit_params.get('sl_multiplier', 1.5)
                     rr_ratio = exit_params.get('rr_ratio', 1.5)
 
-                    if isinstance(sl_multiplier, (pd.Series, np.ndarray)): sl_multiplier = sl_multiplier[-1]
-                    if isinstance(rr_ratio, (pd.Series, np.ndarray)): rr_ratio = rr_ratio[-1]
+                    # PERBAIKAN: Gunakan .iloc untuk konsistensi dan praktik terbaik
+                    if isinstance(sl_multiplier, (pd.Series, np.ndarray)): sl_multiplier = sl_multiplier.iloc[-1]
+                    if isinstance(rr_ratio, (pd.Series, np.ndarray)): rr_ratio = rr_ratio.iloc[-1]
 
                     stop_loss_dist = atr_val * sl_multiplier
-                    sl_price_float = limit_price_float - stop_loss_dist if final_signal == 'LONG' else limit_price_float + stop_loss_dist
-                    tp_price_float = limit_price_float + (stop_loss_dist * rr_ratio) if final_signal == 'LONG' else limit_price_float - (stop_loss_dist * rr_ratio)
 
+                    # --- PERBAIKAN: Selaraskan dengan live_trader, jangan hitung harga absolut di sini ---
                     limit_price_str = self.exchange.price_to_precision(symbol, limit_price_float)
-                    sl_price_str = self.exchange.price_to_precision(symbol, sl_price_float)
-                    tp_price_str = self.exchange.price_to_precision(symbol, tp_price_float)
                     leverage = LEVERAGE_MAP.get(symbol, LEVERAGE_MAP.get("DEFAULT", 10))
 
-                    log_msg = f"DEMO_SIGNAL_CONSENSUS: {final_signal} {symbol} {consensus_details} | ENTRY:{limit_price_str} TP:{tp_price_str} SL:{sl_price_str}"
+                    log_msg = f"DEMO_SIGNAL_CONSENSUS: {final_signal} {symbol} {consensus_details} | Target Entry:{limit_price_str}"
                     console.log(f"[bold yellow]KONSENSUS SINYAL DEMO DITEMUKAN![/bold yellow] {log_msg}")
                     await self.log_event(log_msg)
                     
                     notif_msg = (f"🧪 *Sinyal Demo: {final_signal} {symbol}*\n{consensus_details}\n\n"
-                                 f"Entry (Limit): `{limit_price_str}`\nStop Loss: `{sl_price_str}`\nTake Profit: `{tp_price_str}`\nLeverage: `{leverage}x`")
+                                 f"Target Entry: `{limit_price_str}`\nLeverage: `{leverage}x`")
                     await notifier.send_message(notif_msg)
-                    await self.execute_trade_logic(symbol, final_signal, latest_candle, exit_params, strategy_name, limit_price_float, sl_price_float, tp_price_float)
+                    # --- PERBAIKAN: Kirim stop_loss_dist dan rr_ratio, bukan harga absolut ---
+                    await self.execute_trade_logic(symbol, final_signal, latest_candle, exit_params, strategy_name, limit_price_float, stop_loss_dist, rr_ratio)
 
             except KeyError as e:
                 console.log(f"[bold red]Error KeyError di signal_processor (Demo) untuk {symbol}: Kolom {e} tidak ditemukan.[/bold red]")
@@ -274,7 +274,7 @@ class DemoTrader:
             finally:
                 self.signal_queue.task_done()
 
-    async def execute_trade_logic(self, symbol, direction, candle, exit_params, strategy_name, limit_price_float, sl_price_float, tp_price_float):
+    async def execute_trade_logic(self, symbol, direction, candle, exit_params, strategy_name, limit_price_float, stop_loss_dist, rr_ratio):
         """Menghitung parameter dan menempatkan order di bursa demo."""
         if self.cooldown_until and datetime.now() < self.cooldown_until:
             return
@@ -315,7 +315,7 @@ class DemoTrader:
                     await notifier.send_message(f"🥶 *Mode Cooldown Demo Aktif*\nBot demo tidak akan mencoba eksekusi trade selama {self.cooldown_duration_hours} jam.")
                 return
 
-            stop_loss_pct = abs(limit_price_float - sl_price_float) / limit_price_float
+            stop_loss_pct = stop_loss_dist / limit_price_float
             risk_amount_usd = total_balance * current_risk_per_trade
 
             if stop_loss_pct == 0:
@@ -353,8 +353,6 @@ class DemoTrader:
 
             amount = self.exchange.amount_to_precision(symbol, amount)
             limit_price_str = self.exchange.price_to_precision(symbol, limit_price_float)
-            sl_price_str = self.exchange.price_to_precision(symbol, sl_price_float)
-            tp_price_str = self.exchange.price_to_precision(symbol, tp_price_float)
 
             console.log(f"Mencoba menempatkan order demo untuk {symbol}...")
             
@@ -365,6 +363,11 @@ class DemoTrader:
             params = {}
             if not LIVE_TRADING_CONFIG.get("use_advanced_exit_logic", True):
                 # Mode Statis: Tempatkan SL/TP langsung di bursa
+                # PERBAIKAN: Hitung SL/TP absolut di sini, tepat sebelum mengirim order
+                sl_price_float = limit_price_float - stop_loss_dist if direction == 'LONG' else limit_price_float + stop_loss_dist
+                tp_price_float = limit_price_float + (stop_loss_dist * rr_ratio) if direction == 'LONG' else limit_price_float - (stop_loss_dist * rr_ratio)
+                sl_price_str = self.exchange.price_to_precision(symbol, sl_price_float)
+                tp_price_str = self.exchange.price_to_precision(symbol, tp_price_float)
                 params = {
                     'stopLoss': {'type': 'STOP_MARKET', 'triggerPrice': sl_price_str},
                     'takeProfit': {'type': 'TAKE_PROFIT_MARKET', 'triggerPrice': tp_price_str}
@@ -377,7 +380,13 @@ class DemoTrader:
             else: # Default ke limit order
                 order = await self.exchange.create_order(symbol, 'limit', side, amount, limit_price_str, params)
             
-            self.open_limit_orders.add(symbol)
+            # --- PERBAIKAN: Selaraskan dengan live_trader, simpan state di dict ---
+            self.open_limit_orders[symbol] = {
+                'stop_loss_dist': stop_loss_dist,
+                'rr_ratio': rr_ratio,
+                'positionAmt': amount if side == 'buy' else -amount,
+                'strategy': strategy_name,
+            }
 
             console.log(f"[bold yellow]Order demo berhasil dibuat untuk {symbol}. ID: {order['id']}[/bold yellow]")
             await notifier.send_message(f"🧪 *Order Demo Ditempatkan* untuk {symbol}!\nID: `{order['id']}`")
@@ -469,11 +478,25 @@ class DemoTrader:
 
                     if status == 'closed':
                         if order['type'] in ['limit', 'market'] and symbol_ccxt not in self.active_positions:
-                            if symbol_ccxt in self.open_limit_orders:
-                                self.open_limit_orders.remove(symbol_ccxt)
+                            # --- PERBAIKAN: Selaraskan dengan live_trader ---
+                            custom_state = self.open_limit_orders.pop(symbol_ccxt, {})
+                            if not custom_state:
+                                continue
 
                             position_info = await self.exchange.fetch_position(symbol)
-                            self.active_positions[symbol_ccxt] = position_info['info']
+                            final_position_details = position_info['info']
+                            final_position_details.update(custom_state)
+
+                            # --- PERBAIKAN KRUSIAL: Hitung SL/TP dari harga entry riil ---
+                            entry_price = float(final_position_details['entryPrice'])
+                            stop_loss_dist = final_position_details['stop_loss_dist']
+                            rr_ratio = final_position_details['rr_ratio']
+                            direction = "LONG" if float(final_position_details['positionAmt']) > 0 else "SHORT"
+                            final_position_details['sl_price'] = entry_price - stop_loss_dist if direction == "LONG" else entry_price + stop_loss_dist
+                            final_position_details['initial_sl'] = final_position_details['sl_price']
+                            final_position_details['tp_price'] = entry_price + (stop_loss_dist * rr_ratio) if direction == "LONG" else entry_price - (stop_loss_dist * rr_ratio)
+
+                            self.active_positions[symbol_ccxt] = final_position_details
                             self.save_positions_state()
                             filled_price = order.get('average', order.get('price'))
                             msg = f"✅ *Posisi Demo Dibuka* untuk {symbol} @ `{filled_price}`"
@@ -481,8 +504,8 @@ class DemoTrader:
                             await notifier.send_message(msg)
                             await self.log_event(f"DEMO_ENTRY_FILLED: Posisi {symbol} dibuka @ {filled_price}")
                         else:
-                            if symbol_ccxt in self.open_limit_orders:
-                                self.open_limit_orders.remove(symbol_ccxt)
+                            if symbol_ccxt in self.open_limit_orders.keys():
+                                self.open_limit_orders.pop(symbol_ccxt, None)
 
                             if symbol_ccxt in self.active_positions:
                                 del self.active_positions[symbol_ccxt]
@@ -494,8 +517,8 @@ class DemoTrader:
                             await self.log_event(f"DEMO_EXIT_FILLED: Posisi {symbol} ditutup @ {filled_price}")
 
                     elif status in ['canceled', 'expired']:
-                        if symbol_ccxt in self.open_limit_orders:
-                            self.open_limit_orders.remove(symbol_ccxt)
+                        if symbol_ccxt in self.open_limit_orders.keys():
+                            self.open_limit_orders.pop(symbol_ccxt, None)
 
                         msg = f"ℹ️ *Order Demo Dibatalkan/Kedaluwarsa* untuk {symbol}"
                         console.log(f"[yellow]{msg}[/yellow]")
