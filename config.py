@@ -57,8 +57,8 @@ CONFIG = {
             "sl_atr_pct_scaler": 0.3,
             "rr_ratio": 1.8,
             "volume_ratio": 0.9,
-            "adx_threshold": 16,
-            "not_overextended_pct": 0.015,
+            "adx_threshold": 14, # PERBAIKAN: Longgarkan sedikit lagi
+            "not_overextended_pct": 0.015, # PERBAIKAN: Longgarkan filter, 0.05% terlalu ketat. Sekarang 1.5%
             "volatility_median_window": 50,
             "wick_filter_atr_multiplier": 2.0, # Filter candle sumbu panjang
             "use_or_logic_for_filters": True, # ADX OR wick OK → sinyal lewat
@@ -66,7 +66,7 @@ CONFIG = {
             "debug_mode": True  # Log kenapa sinyal None (e.g., "Skipped: ADX=17 < 18")
         },
         "B1": {
-            "adx_trending_threshold": 18,
+            "adx_trending_threshold": 15, # PERBAIKAN: Longgarkan dan selaraskan
             "adx_ranging_threshold": 22, # Aktifkan kembali untuk ranging mode
             "atr_delta_volatile_threshold": 1.5,
             "rsi_trending_long": 50,
@@ -133,7 +133,7 @@ LIVE_TRADING_CONFIG = {
     "max_margin_usage_pct": 0.60,  # DOWN from 0.80 (more conservative)
     
     # CRITICAL FIX: Require stronger consensus
-    "consensus_ratio": 0.50,  # DOWN from 0.75 (Longgarkan untuk lebih banyak trade)
+    "consensus_ratio": 0.40,  # DOWN from 0.75 (Longgarkan untuk lebih banyak trade)
     
     # Circuit breaker - Tightened
     "circuit_breaker_multiplier": 1.3,  # DOWN from 1.5 (exit sooner)

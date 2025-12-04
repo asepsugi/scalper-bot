@@ -181,7 +181,9 @@ def signal_version_A3(df):
     # Filters yang sekarang dapat dikonfigurasi
     volume_filter = df['volume'] > (df['VOL_20'] * params.get("volume_ratio", 1.05))
     adx_filter = df[f"ADX_{CONFIG['atr_period']}"] > params.get("adx_threshold", 22)
-    not_overextended = abs(df['close'].pct_change(3)) < params.get("not_overextended_pct", 0.009)
+    # PERBAIKAN: Nonaktifkan sementara filter ini karena terlalu ketat dan menyaring semua sinyal.
+    # Cukup gunakan True agar tidak mempengaruhi logika.
+    not_overextended = pd.Series(True, index=df.index)
 
     # Filter Baru: Hanya trade saat volatilitas di atas rata-rata
     atr_col = 'ATRr_10'
@@ -200,16 +202,17 @@ def signal_version_A3(df):
 
     # --- PERBAIKAN: Logika filter dinamis (AND/OR) ---
     use_or_logic = params.get("use_or_logic_for_filters", False)
-    core_filters = (volume_filter | adx_filter) & volatility_filter
-    if use_or_logic:
-        # Jika salah satu dari ADX atau filter sumbu terpenuhi, sinyal lolos
-        combined_main_filter = core_filters | no_large_wick_candle
+    
+    # PERBAIKAN: Perbaiki logika filter agar tidak saling menonaktifkan
+    if use_or_logic and params.get("enable_wick_filter", False):
+        # Jika OR logic aktif, gabungkan ADX dan Wick filter
+        main_filter = adx_filter | no_large_wick_candle
     else:
-        # Logika default: semua filter harus terpenuhi
-        combined_main_filter = core_filters & no_large_wick_candle
+        # Jika tidak, gunakan AND logic
+        main_filter = adx_filter & no_large_wick_candle
 
-    long_signal = base_long & not_overextended & combined_main_filter
-    short_signal = base_short & not_overextended & combined_main_filter
+    long_signal = base_long & volume_filter & not_overextended & volatility_filter & main_filter
+    short_signal = base_short & volume_filter & not_overextended & volatility_filter & main_filter
 
     # --- FITUR BARU: Debug Mode ---
     if params.get("debug_mode", False) and not df.empty:
@@ -227,7 +230,7 @@ def signal_version_A3(df):
                 reasons.append("Overextended")
             if not volatility_filter.loc[last_idx]:
                 reasons.append("VolatilityFilter")
-            if not combined_main_filter.loc[last_idx]:
+            if not main_filter.loc[last_idx]:
                 # Beri detail lebih untuk filter gabungan
                 if not adx_filter.loc[last_idx]:
                     reasons.append(f"ADX < {params.get('adx_threshold', 22)}")
@@ -331,8 +334,8 @@ def signal_version_B1(df):
         combined_main_filter = is_trending & no_large_wick_candle
 
     # Filter out extreme volatility AND low volatility
-    long_signal = long_signal & ~is_volatile & volatility_filter & combined_main_filter
-    short_signal = short_signal & ~is_volatile & volatility_filter & combined_main_filter
+    long_signal = long_signal & volatility_filter & combined_main_filter
+    short_signal = short_signal & volatility_filter & combined_main_filter
 
     # --- PERBAIKAN: Tambahkan filter volume & volatilitas dinamis ---
     # Sinyal hanya valid jika volume dan ATR saat ini lebih tinggi dari rata-rata 20 candle terakhir.
@@ -342,9 +345,9 @@ def signal_version_B1(df):
     volume_mult = params.get("volume_ma_multiplier", 1.2)
     atr_mult = params.get("atr_ma_multiplier", 1.1)
 
-    # Terapkan filter ke sinyal yang sudah ada
-    long_signal = long_signal & (df['volume'] > volume_mult * vol_ma20) & (df['ATRr_10'] > atr_mult * atr_ma20)
-    short_signal = short_signal & (df['volume'] > volume_mult * vol_ma20) & (df['ATRr_10'] > atr_mult * atr_ma20)
+    # PERBAIKAN: Nonaktifkan sementara filter ini karena terlalu ketat
+    # long_signal = long_signal & (df['volume'] > volume_mult * vol_ma20) & (df['ATRr_10'] > atr_mult * atr_ma20)
+    # short_signal = short_signal & (df['volume'] > volume_mult * vol_ma20) & (df['ATRr_10'] > atr_mult * atr_ma20)
 
     # --- FITUR BARU: Debug Mode ---
     if params.get("debug_mode", False) and not df.empty:
@@ -546,13 +549,12 @@ STRATEGY_CONFIG = {
     
     "AdaptiveTrendRide(A3)": {
         "function": signal_version_A3,
-        "weight": 0.80  # Bobot utama
+        "weight": 0.50  # Bobot utama
+    },
+    "SmartRegimeScalper(B1)": {
+        "function": signal_version_B1,
+        "weight": 0.50  # Standard weight
     }
-    # ,
-    # "SmartRegimeScalper(B1)": {
-    #     "function": signal_version_B1,
-    #     "weight": 0.50  # Standard weight
-    # }
     # ,
     # "HybridScalper": {
     #     "function": signal_version_HYBRID_SCALPER,
