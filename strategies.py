@@ -200,18 +200,23 @@ def signal_version_A3(df):
 
     # --- PERBAIKAN: Logika filter dinamis (AND/OR) ---
     use_or_logic = params.get("use_or_logic_for_filters", False)
+    core_filters = (volume_filter | adx_filter) & volatility_filter
     if use_or_logic:
         # Jika salah satu dari ADX atau filter sumbu terpenuhi, sinyal lolos
-        combined_main_filter = adx_filter | no_large_wick_candle
+        combined_main_filter = core_filters | no_large_wick_candle
     else:
         # Logika default: semua filter harus terpenuhi
-        combined_main_filter = adx_filter & no_large_wick_candle
+        combined_main_filter = core_filters & no_large_wick_candle
 
-    long_signal = base_long & volume_filter & not_overextended & volatility_filter & combined_main_filter
-    short_signal = base_short & volume_filter & not_overextended & volatility_filter & combined_main_filter
+    long_signal = base_long & not_overextended & combined_main_filter
+    short_signal = base_short & not_overextended & combined_main_filter
 
     # --- FITUR BARU: Debug Mode ---
     if params.get("debug_mode", False) and not df.empty:
+        # Tambah debug:
+        if not long_signal.iloc[-1]:
+            print(f"DEBUG [A3]: Skipped vol={volume_filter.iloc[-1]}, adx={adx_filter.iloc[-1]}, vola={volatility_filter.iloc[-1]}")
+
         last_idx = df.index[-1]
         # Cek jika ada sinyal dasar, tapi sinyal final gagal
         if (base_long.loc[last_idx] or base_short.loc[last_idx]) and not (long_signal.loc[last_idx] or short_signal.loc[last_idx]):
