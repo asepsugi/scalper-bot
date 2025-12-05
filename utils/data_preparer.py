@@ -15,13 +15,13 @@ def prepare_data(df_signal, df_trend_15m, df_trend_1h):
 
     # --- PERBAIKAN: Impor CONFIG di dalam fungsi untuk menghindari circular import ---
     from config import CONFIG
+    from indicators import add_linear_regression_angle # Impor fungsi helper
     
     # --- REVISI ALUR LOGIKA UNTUK MENGHILANGKAN WARNING ---
     # 1. Hitung indikator pada setiap DataFrame secara terpisah TERLEBIH DAHULU.
     # Ini memastikan semua kolom sumber ('RSI_14', 'EMA_50', dll.) ada sebelum digabungkan.
-    df_signal = calculate_indicators(df_signal.copy())
-    df_trend_15m = calculate_indicators(df_trend_15m.copy())
-    df_trend_1h = calculate_indicators(df_trend_1h.copy())
+    # PERBAIKAN: Hanya hitung indikator dasar di sini. Indikator kustom akan dihitung nanti.
+    df_signal, df_trend_15m, df_trend_1h = [calculate_indicators(df.copy()) for df in [df_signal, df_trend_15m, df_trend_1h]]
 
     # 2. Jadikan df_signal yang sudah diproses sebagai basis utama.
     base_df = df_signal.copy()
@@ -77,11 +77,6 @@ def prepare_data(df_signal, df_trend_15m, df_trend_1h):
     else:
         base_df["ATR_delta"] = 0.0
 
-    # --- REVISI (C.1): Hitung persentil ATR untuk filter volatilitas ---
-    # Menggunakan window panjang (misal, 7 hari di TF 15m = 7*24*4 = 672) untuk mendapatkan baseline volatilitas yang stabil.
-    atr_percentile_window = 672
-    base_df['atr_percentile'] = base_df[atr_col].rolling(window=atr_percentile_window, min_periods=100).quantile(CONFIG['trade_filters']['min_volatility_atr_percentile'])
-    
     # --- LANGKAH 5 (BARU): Jalankan Analisis SMC pada TF Trend dan gabungkan ---
     # Kita gunakan df_trend_15m sebagai basis analisis SMC
     smc_zones = analyze_smc_on_trend_tf(df_trend_15m)
@@ -114,7 +109,13 @@ def prepare_data(df_signal, df_trend_15m, df_trend_1h):
         base_df['smc_is_premium'] = base_df['close'] > smc_zones["equilibrium"]
 
     # --- PERBAIKAN FINAL: Isi nilai NaN setelah semua kolom digabungkan ---
-    base_df.bfill(inplace=True)
+    # HAPUS bfill() karena menyebabkan lookahead bias dan merusak data historis.
+    # Gunakan ffill() saja untuk mengisi gap setelah penggabungan timeframe.
     base_df.ffill(inplace=True)
+
+    # --- PERBAIKAN DEFINITIF: Hapus semua jenis .dropna() dari sini ---
+    # Tugas data_preparer adalah menyiapkan dan menggabungkan data.
+    # Pembersihan data akan ditangani oleh pemanggil (strategi atau backtester)
+    # dengan cara yang sesuai dengan konteksnya masing-masing.
 
     return base_df

@@ -38,9 +38,22 @@ def validate_indicator_data(required_columns: list):
             # 2. Cek semua kolom yang dibutuhkan
             missing_cols = [col for col in required_columns if col not in df.columns]
             if missing_cols:
-                # Ini adalah error serius yang perlu dicatat, tapi hanya sekali.
-                # print(f"Strategy {func.__name__} skipped: Missing columns {missing_cols}")
-                return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+                # PERBAIKAN: Jangan hentikan strategi, tapi gunakan nilai fallback.
+                print(f"DEBUG [{func.__name__}]: Warning - Missing {missing_cols}. Using fallback values.")
+                for col in missing_cols:
+                    if 'ADX' in col:
+                        df[col] = 20.0  # Default: tren netral/lemah
+                    elif 'ATR' in col:
+                        # Gunakan nilai kecil yang tidak nol untuk menghindari pembagian dengan nol
+                        df[col] = df['close'].mean() * 0.01 
+                    elif 'SUPERT' in col:
+                        df[col] = 1  # Default: sinyal uptrend
+                    elif 'VOL_' in col:
+                        df[col] = df['volume'].mean() # Default: volume rata-rata
+                    elif 'rsi' in col:
+                        df[col] = 50.0 # Default: RSI netral
+                    else:
+                        df[col] = 0.0 # Fallback umum
 
             # 3. Cek nilai NaN di baris terakhir untuk kolom-kolom penting
             last_row = df.iloc[-1]
@@ -58,6 +71,19 @@ def determine_entry_profile(df_row):
     """
     if not ENTRY_LOGIC.get("enabled", False):
         return {'profile': 'DISABLED', 'offset_pct': EXECUTION.get("limit_order_offset_pct", 0.0002), 'risk_pct': CONFIG['risk_per_trade'], 'order_type': 'limit'}
+
+    # --- PERBAIKAN: Logika Khusus untuk Strategi Breakout ---
+    # Jika sinyal berasal dari AltcoinVolumeBreakoutHunter, paksa penggunaan profil CONTINUATION
+    # untuk memastikan eksekusi yang cepat dan tidak ketinggalan momen.
+    if df_row.get('strategy') == 'AltcoinVolumeBreakoutHunter':
+        # Gunakan market order jika tren sangat kuat, jika tidak, gunakan limit order yang agresif.
+        order_type = 'market' if df_row.get(f"ADX_{CONFIG['atr_period']}", 0) > ENTRY_LOGIC['market_order_adx_threshold'] else 'limit'
+        return {
+            'profile': 'CONTINUATION (Forced)',
+            'offset_pct': ENTRY_LOGIC['continuation_offset_pct'], # Offset yang sangat kecil
+            'risk_pct': ENTRY_LOGIC['continuation_risk_pct'],
+            'order_type': order_type
+        }
 
     # --- PERBAIKAN: Deteksi Kondisi Continuation (Harga Kuat) yang Disempurnakan ---
     # 1. Cek Tren & Momentum Dasar
@@ -129,10 +155,17 @@ def determine_entry_profile(df_row):
             'order_type': 'limit'
         }
 
-    # --- PERBAIKAN: Default ke Market Order jika tidak ada profil yang cocok ---
-    return {'profile': 'DEFAULT', 'offset_pct': 0, 'risk_pct': CONFIG['risk_per_trade'], 'order_type': 'market'}
+    # --- PERBAIKAN: Default ke profil yang dapat dikonfigurasi ---
+    # Jika tidak ada profil agresif (continuation/pullback) yang cocok, gunakan profil default.
+    # Ini bisa berupa market order atau limit order yang sabar, tergantung konfigurasi.
+    return {
+        'profile': 'DEFAULT', 
+        'offset_pct': ENTRY_LOGIC['default_offset_pct'], # Gunakan offset dari config
+        'risk_pct': CONFIG['risk_per_trade'], 
+        'order_type': 'limit' # Defaultnya adalah limit order yang sabar
+    }
 
-def signal_version_A3(df):
+def signal_version_A3(df, symbol: str = None):
     """
     OPTIMIZED A3 - AdaptiveTrendRide (Your historically best performer)
     
@@ -146,20 +179,21 @@ def signal_version_A3(df):
     
     Expected: 40-60 trades (up from 15) with 65-70% WR
     """
-    # Tentukan kolom yang wajib ada untuk strategi ini
-    required_cols = [
-        'trend', 'rsi_15m', 'VOL_20', f"ADX_{CONFIG['atr_period']}", 'ATRr_10',
-        'atr_percentile', 'volume'
-    ]
-
-    # Validasi data sebelum melanjutkan
-    for col in required_cols:
-        if col not in df.columns: return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
-
     # Baca parameter dari config, dengan fallback ke nilai default yang aman
     params = CONFIG.get("strategy_params", {}).get("A3", {})
     sl_base = params.get("sl_base_multiplier", 1.0)
     sl_scaler = params.get("sl_atr_pct_scaler", 0.3)
+
+    # --- PERBAIKAN KRUSIAL: Gunakan nama kolom dinamis dari CONFIG ---
+    atr_col = f"ATRr_{CONFIG['atr_period']}" # Seharusnya sudah benar, memastikan saja
+    adx_col = f"ADX_{CONFIG['atr_period']}"
+    vol_col = f"VOL_{CONFIG['volume_lookback']}"
+
+    # Validasi data sebelum melanjutkan
+    required_cols = ['rsi_15m', vol_col, adx_col, 'atr_percentile']
+    for col in required_cols:
+        if col not in df.columns:
+            return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
 
     # Dynamic SL/TP: SL multiplier dinamis berdasarkan volatilitas
     # atr_percentile (0-1) dipetakan ke SL multiplier (1.0-1.3)
@@ -170,72 +204,48 @@ def signal_version_A3(df):
         'rr_ratio': params.get("rr_ratio", 1.8)
     }
 
-    # Core A3 logic - RSI cross on 15m with trend alignment
-    base_long = (df['trend'] == 'UPTREND') & \
-                (df['rsi_15m'].shift(1) < 50) & \
-                (df['rsi_15m'] > 50)
-    base_short = (df['trend'] == 'DOWNTREND') & \
-                 (df['rsi_15m'].shift(1) > 50) & \
-                 (df['rsi_15m'] < 50)
+    # --- SOLUSI DEFINITIF: Sederhanakan sinyal dasar & filter ---
+    # Sinyal dasar: RSI 15m sebagai indikator tren jangka pendek.
+    base_long = (df['rsi_15m'] > 51)
+    base_short = (df['rsi_15m'] < 49)
 
-    # Filters yang sekarang dapat dikonfigurasi
-    volume_filter = df['volume'] > (df['VOL_20'] * params.get("volume_ratio", 1.05))
-    adx_filter = df[f"ADX_{CONFIG['atr_period']}"] > params.get("adx_threshold", 22)
-    # PERBAIKAN: Nonaktifkan sementara filter ini karena terlalu ketat dan menyaring semua sinyal.
-    # Cukup gunakan True agar tidak mempengaruhi logika.
-    not_overextended = pd.Series(True, index=df.index)
+    # Filter 1: Tren harus cukup kuat (ADX > 18).
+    adx_filter = df[adx_col] > params.get("adx_threshold", 18)
+    # Filter 2: Volatilitas tidak boleh terlalu rendah (di atas 25% percentile).
+    volatility_filter = df['atr_percentile'] > CONFIG.get("trade_filters", {}).get("min_volatility_atr_percentile", 0.25)
 
-    # Filter Baru: Hanya trade saat volatilitas di atas rata-rata
-    atr_col = 'ATRr_10'
-    volatility_window = params.get("volatility_median_window", 100)
-    volatility_filter = df[atr_col] > df[atr_col].rolling(volatility_window).median()
-    
-    # --- PERBAIKAN: Tambahkan filter untuk candle dengan sumbu (wick) yang sangat panjang ---
-    # Ini membantu menghindari entry pada candle stop-hunt atau trap.
+    # --- PERBAIKAN: Kembalikan Wick Filter yang dapat dikonfigurasi ---
+    # Filter ini membantu menghindari entry pada candle dengan sumbu (wick) yang sangat panjang.
     if params.get("enable_wick_filter", False):
         candle_range = df['high'] - df['low']
-        avg_atr = df[atr_col].rolling(20).mean()
-        wick_filter_multiplier = params.get("wick_filter_atr_multiplier", 3.0)
-        no_large_wick_candle = candle_range < (avg_atr * wick_filter_multiplier)
+        # Gunakan ATR langsung, bukan rata-ratanya, untuk perbandingan yang lebih reaktif
+        wick_filter_multiplier = params.get("wick_filter_atr_multiplier", 2.5) # Sedikit lebih ketat
+        no_large_wick_candle = candle_range < (df[atr_col] * wick_filter_multiplier)
     else:
+        # Jika dinonaktifkan, filter ini tidak akan berpengaruh
         no_large_wick_candle = pd.Series(True, index=df.index)
 
-    # --- PERBAIKAN: Logika filter dinamis (AND/OR) ---
-    use_or_logic = params.get("use_or_logic_for_filters", False)
+    # Gabungkan sinyal dasar HANYA dengan filter-filter esensial.
+    # Menghapus filter volume, overextended, dll. yang saling bertentangan.
+    long_signal = base_long & adx_filter & volatility_filter & no_large_wick_candle
+    short_signal = base_short & adx_filter & volatility_filter & no_large_wick_candle
     
-    # PERBAIKAN: Perbaiki logika filter agar tidak saling menonaktifkan
-    if use_or_logic and params.get("enable_wick_filter", False):
-        # Jika OR logic aktif, gabungkan ADX dan Wick filter
-        main_filter = adx_filter | no_large_wick_candle
-    else:
-        # Jika tidak, gunakan AND logic
-        main_filter = adx_filter & no_large_wick_candle
-
-    long_signal = base_long & volume_filter & not_overextended & volatility_filter & main_filter
-    short_signal = base_short & volume_filter & not_overextended & volatility_filter & main_filter
-
     # --- FITUR BARU: Debug Mode ---
     if params.get("debug_mode", False) and not df.empty:
-        # Tambah debug:
-        if not long_signal.iloc[-1]:
-            print(f"DEBUG [A3]: Skipped vol={volume_filter.iloc[-1]}, adx={adx_filter.iloc[-1]}, vola={volatility_filter.iloc[-1]}")
+        # --- PERBAIKAN: Logika debug yang lebih informatif ---
+        if not long_signal.any() and not short_signal.any():
+            print(f"DEBUG [A3]: No signals generated. Last RSI_15m: {df['rsi_15m'].iloc[-1]:.2f}")
 
         last_idx = df.index[-1]
         # Cek jika ada sinyal dasar, tapi sinyal final gagal
         if (base_long.loc[last_idx] or base_short.loc[last_idx]) and not (long_signal.loc[last_idx] or short_signal.loc[last_idx]):
             reasons = []
-            if not volume_filter.loc[last_idx]:
-                reasons.append("VolumeFilter")
-            if not not_overextended.loc[last_idx]:
-                reasons.append("Overextended")
             if not volatility_filter.loc[last_idx]:
                 reasons.append("VolatilityFilter")
-            if not main_filter.loc[last_idx]:
-                # Beri detail lebih untuk filter gabungan
-                if not adx_filter.loc[last_idx]:
-                    reasons.append(f"ADX < {params.get('adx_threshold', 22)}")
-                if params.get("enable_wick_filter", False) and not no_large_wick_candle.loc[last_idx]:
-                    reasons.append("WickFilter")
+            if not adx_filter.loc[last_idx]:
+                reasons.append(f"ADX < {params.get('adx_threshold', 18)}")
+            if params.get("enable_wick_filter", False) and not no_large_wick_candle.loc[last_idx]:
+                reasons.append("WickFilter")
             
             if reasons:
                 print(f"DEBUG [A3]: Signal filtered on last candle. Reasons: {', '.join(reasons)}")
@@ -243,7 +253,7 @@ def signal_version_A3(df):
     return long_signal, short_signal, exit_params
 
 
-def signal_version_B1(df):
+def signal_version_B1(df, symbol: str = None):
     """
     OPTIMIZED B1 - SmartRegimeScalper
     
@@ -257,9 +267,10 @@ def signal_version_B1(df):
     Expected: +20-30 trades from original B1
     """
     # Tentukan kolom yang wajib ada untuk strategi ini
+    # --- PERBAIKAN BUG: Sesuaikan nama kolom ATR agar konsisten ---
     required_cols = [
-        'trend_ema_15m', 'rsi_15m', 'VOL_20', f"ADX_{CONFIG['atr_period']}",
-        'ATR_delta', 'SUPERTd_10_3.0', 'ATRr_10', 'atr_percentile', 'volume'
+        'rsi_15m', f"ADX_{CONFIG['atr_period']}",
+        'SUPERTd_10_3.0', f"ATRr_{CONFIG['atr_period']}", 'atr_percentile'
     ]
 
     # Validasi data sebelum melanjutkan
@@ -281,92 +292,52 @@ def signal_version_B1(df):
     sl_multiplier = dynamic_sl_multiplier if 'atr_percentile' in df.columns else 1.5
 
     adx = df[f"ADX_{CONFIG['atr_period']}"]
-    atr_delta = df.get('ATR_delta', pd.Series(0, index=df.index))
     supertrend_direction = df.get('SUPERTd_10_3.0', pd.Series(0, index=df.index))
 
     # Regime Detection
-    is_trending = (adx > params.get("adx_trending_threshold", 22))
-    is_ranging = (adx < params.get("adx_ranging_threshold", 20))
-    is_volatile = (atr_delta > params.get("atr_delta_volatile_threshold", 2.0))
+    is_trending = adx > params.get("adx_trending_threshold", 22)
+    is_ranging = adx < params.get("adx_ranging_threshold", 18)
 
-    # Trend Following Setup (for trending markets)
-    long_trend = (df['close'] > df['trend_ema_15m']) & \
-                 (df['rsi_15m'] > params.get("rsi_trending_long", 50)) & \
-                 (df['volume'] > df['VOL_20'] * params.get("volume_ratio", 1.05)) & \
-                 (supertrend_direction == 1) # Gabung dengan SuperTrend
-    short_trend = (df['close'] < df['trend_ema_15m']) & \
-                  (df['rsi_15m'] < params.get("rsi_trending_short", 50)) & \
-                  (df['volume'] > df['VOL_20'] * params.get("volume_ratio", 1.05)) & \
-                  (supertrend_direction == -1) # Gabung dengan SuperTrend
+    # --- SOLUSI DEFINITIF: Sederhanakan logika sinyal B1 ---
+    # Mode 1: Trend Following (saat pasar sedang tren)
+    long_trend = (supertrend_direction == 1)
+    short_trend = (supertrend_direction == -1)
     
-    # --- PERBAIKAN: Aktifkan kembali Ranging Mode ---
-    long_range = (df['rsi_15m'] < 40) & (supertrend_direction == 1)  # Simple bounce
-    short_range = (df['rsi_15m'] > 60) & (supertrend_direction == -1) # Symmetric bounce
+    # Mode 2: Mean Reversion (saat pasar sedang ranging)
+    long_range = (df['rsi_15m'] < 40) # Beli saat oversold di pasar ranging
+    short_range = (df['rsi_15m'] > 60) # Jual saat overbought di pasar ranging
 
-    # Gabungkan sinyal berdasarkan rezim pasar
-    long_signal = pd.Series(False, index=df.index)
-    short_signal = pd.Series(False, index=df.index)
-    long_signal.loc[is_trending] = long_trend.loc[is_trending]
-    long_signal.loc[is_ranging] = long_range.loc[is_ranging]
-    short_signal.loc[is_trending] = short_trend.loc[is_trending]
-    short_signal.loc[is_ranging] = short_range.loc[is_ranging]
+    # Sinyal aktif jika (kondisi tren terpenuhi) ATAU (kondisi ranging terpenuhi).
+    long_signal = (long_trend & is_trending) | (long_range & is_ranging)
+    short_signal = (short_trend & is_trending) | (short_range & is_ranging)
     
-    # Filter Baru: Hanya trade saat volatilitas di atas rata-rata
-    atr_col = 'ATRr_10'
-    volatility_window = params.get("volatility_median_window", 100)
-    volatility_filter = df[atr_col] > df[atr_col].rolling(volatility_window).median()
+    # Terapkan SATU filter global: volatilitas tidak boleh terlalu rendah.
+    volatility_filter = df['atr_percentile'] > CONFIG.get("trade_filters", {}).get("min_volatility_atr_percentile", 0.25)
 
-    # --- PERBAIKAN: Tambahkan filter untuk candle dengan sumbu (wick) yang sangat panjang ---
+    # --- PERBAIKAN: Kembalikan Wick Filter yang dapat dikonfigurasi ---
+    atr_col = f"ATRr_{CONFIG['atr_period']}"
     if params.get("enable_wick_filter", False):
         candle_range = df['high'] - df['low']
-        avg_atr = df[atr_col].rolling(20).mean()
-        wick_filter_multiplier = params.get("wick_filter_atr_multiplier", 3.0)
-        no_large_wick_candle = candle_range < (avg_atr * wick_filter_multiplier)
+        wick_filter_multiplier = params.get("wick_filter_atr_multiplier", 2.5)
+        no_large_wick_candle = candle_range < (df[atr_col] * wick_filter_multiplier)
     else:
+        # Jika dinonaktifkan, filter ini tidak akan berpengaruh
         no_large_wick_candle = pd.Series(True, index=df.index)
 
-    # --- PERBAIKAN: Logika filter dinamis (AND/OR) ---
-    use_or_logic = params.get("use_or_logic_for_filters", False)
-    if use_or_logic:
-        # Untuk B1, filter utamanya adalah is_trending dan no_large_wick
-        combined_main_filter = is_trending | no_large_wick_candle
-    else:
-        combined_main_filter = is_trending & no_large_wick_candle
-
-    # Filter out extreme volatility AND low volatility
-    long_signal = long_signal & volatility_filter & combined_main_filter
-    short_signal = short_signal & volatility_filter & combined_main_filter
-
-    # --- PERBAIKAN: Tambahkan filter volume & volatilitas dinamis ---
-    # Sinyal hanya valid jika volume dan ATR saat ini lebih tinggi dari rata-rata 20 candle terakhir.
-    vol_ma20 = df['volume'].rolling(20).mean()
-    atr_ma20 = df['ATRr_10'].rolling(20).mean()
-
-    volume_mult = params.get("volume_ma_multiplier", 1.2)
-    atr_mult = params.get("atr_ma_multiplier", 1.1)
-
-    # PERBAIKAN: Nonaktifkan sementara filter ini karena terlalu ketat
-    # long_signal = long_signal & (df['volume'] > volume_mult * vol_ma20) & (df['ATRr_10'] > atr_mult * atr_ma20)
-    # short_signal = short_signal & (df['volume'] > volume_mult * vol_ma20) & (df['ATRr_10'] > atr_mult * atr_ma20)
+    # Hapus semua filter tambahan yang terlalu rumit dan saling membatalkan.
+    long_signal = long_signal & volatility_filter & no_large_wick_candle
+    short_signal = short_signal & volatility_filter & no_large_wick_candle
 
     # --- FITUR BARU: Debug Mode ---
     if params.get("debug_mode", False) and not df.empty:
         last_idx = df.index[-1]
         # Cek jika ada sinyal dasar, tapi sinyal final gagal
-        base_signal_exists = (long_signal.loc[last_idx] or short_signal.loc[last_idx])
-        final_signal_exists = (long_signal.loc[last_idx] or short_signal.loc[last_idx])
-
-        if base_signal_exists and not final_signal_exists:
+        if (long_signal.loc[last_idx] or short_signal.loc[last_idx]) and not (long_signal.loc[last_idx] or short_signal.loc[last_idx]):
             reasons = []
-            if is_volatile.loc[last_idx]:
-                reasons.append("IsVolatile")
             if not volatility_filter.loc[last_idx]:
                 reasons.append("VolatilityFilter")
-            if not combined_main_filter.loc[last_idx]:
-                if not is_trending.loc[last_idx]:
-                    reasons.append(f"ADX < {params.get('adx_trending_threshold', 22)}")
-                if params.get("enable_wick_filter", False) and not no_large_wick_candle.loc[last_idx]:
-                    reasons.append("WickFilter")
+            if params.get("enable_wick_filter", False) and not no_large_wick_candle.loc[last_idx]:
+                reasons.append("WickFilter")
             
             if reasons:
                 print(f"DEBUG [B1]: Signal filtered on last candle. Reasons: {', '.join(reasons)}")
@@ -379,7 +350,7 @@ def signal_version_B1(df):
     return long_signal, short_signal, exit_params
 
 
-def signal_version_HYBRID_SCALPER(df):
+def signal_version_HYBRID_SCALPER(df, symbol: str = None):
     """
     NEW ACTIVE STRATEGY: Purpose-built high-frequency scalper
     
@@ -450,7 +421,7 @@ def signal_version_HYBRID_SCALPER(df):
     return long_signal, short_signal, exit_params
 
 
-def signal_version_A3_CONSERVATIVE(df):
+def signal_version_A3_CONSERVATIVE(df, symbol: str = None):
     """
     FALLBACK STRATEGY: Original A3 with all filters intact
     Use this if optimized version generates too many false signals
@@ -494,7 +465,7 @@ def signal_version_A3_CONSERVATIVE(df):
     return long_signal, short_signal, exit_params
 
 
-def signal_version_BREAKOUT_HUNTER(df):
+def signal_version_BREAKOUT_HUNTER(df, symbol: str = None):
     """
     EXPERIMENTAL: Volatility breakout strategy
     Catches explosive moves from consolidation
@@ -540,6 +511,119 @@ def signal_version_BREAKOUT_HUNTER(df):
     return long_signal, short_signal, exit_params
 
 
+def signal_version_AltcoinVolumeBreakoutHunter(df, symbol: str = None):
+    """
+    NEW EXPERIMENTAL STRATEGY: Altcoin Volume Breakout Hunter
+
+    Designed for volatile altcoins in 2024-2025.
+    - Signal: Volume spike (5-8x MA) + Breakout of recent range.
+    - Filters: Strong candle body, anti-chase mechanism.
+    - Exits: Wide SL (2.8x ATR), aggressive trailing, and partial TPs.
+    """
+    params = CONFIG.get("strategy_params", {}).get("AltcoinVolumeBreakoutHunter", {})
+
+    # --- PERBAIKAN: Blacklist untuk koin besar ---
+    # Sekarang kita menerima 'symbol' sebagai argumen, jadi kita bisa cek langsung.
+    if symbol and symbol in params.get("symbol_blacklist", []):
+        # Jika simbol ada di blacklist, langsung kembalikan sinyal kosong.
+        return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+
+    # --- Indikator & Kolom yang Dibutuhkan ---
+    atr_col = f"ATRr_{CONFIG['atr_period']}"
+    vol_ma_col = f"VOL_{CONFIG['volume_lookback']}"
+    required_cols = ['high', 'low', 'close', 'open', 'volume', atr_col, vol_ma_col]
+
+    # Validasi data
+    if any(col not in df.columns for col in required_cols):
+        return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+
+    # --- PILAR 1: MARKET REGIME FILTER (Anti-Choppy & Anti-Distribution) ---
+    if params.get("enable_regime_filter", False):
+        adx_col = f"ADX_{CONFIG['atr_period']}"
+        if adx_col not in df.columns: # Pastikan kolom ADX ada
+            return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+
+        # Kondisi 1: ADX >= 19 (ada momentum direksional)
+        adx_ok = df[adx_col] >= params.get("regime_adx_threshold", 19)
+        
+        # Kondisi 2: ATR / Close >= 0.85% (volatilitas harian minimal)
+        atr_pct = (df[atr_col] / df['close'])
+        volatility_ok = atr_pct >= params.get("regime_atr_pct_threshold", 0.0085)
+        
+        regime_filter = adx_ok & volatility_ok
+
+    # --- Parameter dari Config ---
+    breakout_window = params.get("breakout_window", 14)
+    volume_spike_multiplier = params.get("volume_spike_multiplier", 6.5)
+    candle_body_ratio = params.get("candle_body_ratio", 0.65)
+    anti_chase_pct = params.get("anti_chase_pct", 0.01) # 1% move in last 2 candles
+
+    # --- Logika Sinyal ---
+
+    # 1. Filter Volume Spike
+    # Volume saat ini harus N kali lebih besar dari rata-rata volume 20 candle terakhir.
+    volume_spike = df['volume'] > (df[vol_ma_col] * volume_spike_multiplier)
+
+    # 2. Filter Breakout Range
+    # Harga penutupan saat ini harus menembus harga tertinggi/terendah dari N candle terakhir.
+    recent_high = df['high'].shift(1).rolling(window=breakout_window).max()
+    recent_low = df['low'].shift(1).rolling(window=breakout_window).min()
+    breakout_long = df['close'] > recent_high
+    breakout_short = df['close'] < recent_low
+
+    # 3. Filter Strong Candle
+    # Badan candle harus mendominasi (misal, >65% dari total range high-low).
+    candle_range = df['high'] - df['low']
+    candle_body = abs(df['close'] - df['open'])
+    is_strong_candle = (candle_body / candle_range.replace(0, np.nan)) > candle_body_ratio
+
+    # 4. Filter Anti-Chase
+    # Mencegah masuk setelah harga sudah bergerak terlalu kencang.
+    # Perubahan harga dalam 2 candle terakhir tidak boleh lebih dari X%.
+    price_change_2_candles = abs(df['close'].pct_change(2))
+    not_chasing_price = price_change_2_candles < anti_chase_pct
+
+    # 5. (BARU) Filter Tren EMA
+    # Memastikan breakout searah dengan tren jangka pendek untuk meningkatkan win rate.
+    if params.get("enable_ema_filter", False):
+        ema_col = f"EMA_{CONFIG['ema_period']}"
+        if ema_col in df.columns:
+            with_trend = (df['close'] > df[ema_col])
+            against_trend = (df['close'] < df[ema_col])
+        else: # Fallback jika EMA tidak ada
+            with_trend, against_trend = pd.Series(True, index=df.index), pd.Series(True, index=df.index)
+    else: # Jika filter dinonaktifkan di config
+        with_trend = pd.Series(True, index=df.index)
+        against_trend = pd.Series(True, index=df.index)
+
+    # --- Gabungkan Sinyal ---
+    long_signal = volume_spike & breakout_long & is_strong_candle & not_chasing_price & with_trend
+    short_signal = volume_spike & breakout_short & is_strong_candle & not_chasing_price & against_trend
+
+    # Terapkan Market Regime Filter jika aktif
+    if params.get("enable_regime_filter", False):
+        long_signal = long_signal & regime_filter
+        short_signal = short_signal & regime_filter
+
+    # --- Metadata & Parameter Exit ---
+    # Sesuai permintaan: SL 2.8x ATR, Trailing start 2R, distance 3.0x ATR,
+    # Partial TPs di 5R (50%) dan 10R (30%).
+    exit_params = {
+        'sl_multiplier': params.get("sl_multiplier", 2.8),
+        'rr_ratio': 15.0, # Target TP utama sangat jauh, karena kita pakai partial & trailing
+        'partial_tps': [
+            (5.0, 0.50),  # Jual 50% di 5R
+            (10.0, 0.30), # Jual 30% di 10R
+        ],
+        'trailing': {
+            "enabled": True,
+            "trigger_rr": params.get("trailing_trigger_rr", 2.0),
+            "distance_atr": params.get("trailing_distance_atr", 3.0),
+        }
+    }
+
+    return long_signal, short_signal, exit_params
+
 # =============================================================================
 # STRATEGY CONFIGURATION - OPTIMIZED WEIGHTS
 # =============================================================================
@@ -547,13 +631,17 @@ def signal_version_BREAKOUT_HUNTER(df):
 STRATEGY_CONFIG = {
     # === ACTIVE STRATEGIES (These will generate signals) ===
     
-    "AdaptiveTrendRide(A3)": {
-        "function": signal_version_A3,
-        "weight": 0.50  # Bobot utama
-    },
-    "SmartRegimeScalper(B1)": {
-        "function": signal_version_B1,
-        "weight": 0.50  # Standard weight
+    # "AdaptiveTrendRide(A3)": {
+    #     "function": signal_version_A3,
+    #     "weight": 0.50  # Bobot utama
+    # },
+    # "SmartRegimeScalper(B1)": {
+    #     "function": signal_version_B1,
+    #     "weight": 0.50  # Standard weight
+    # },
+    "AltcoinVolumeBreakoutHunter": {
+        "function": signal_version_AltcoinVolumeBreakoutHunter,
+        "weight": 0.35 # Bobot lebih rendah karena sangat spesifik
     }
     # ,
     # "HybridScalper": {

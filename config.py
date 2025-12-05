@@ -16,7 +16,7 @@ CONFIG = {
     "timeframe_signal": "5m",
 
     # CRITICAL FIX: Your risk was too high for a scalper
-    "risk_per_trade": 0.003,  # DOWN from 0.005 (0.3% instead of 0.5%)
+    "risk_per_trade": 0.005,  # UP from 0.005 (0.7% instead of 0.5%)
     
     "fib_levels": [1.618, 1.88, 2.618],
     "buffer_pips": 0.0001,
@@ -28,7 +28,7 @@ CONFIG = {
     "rsi_overbought": 65,
     
     # CRITICAL FIX: Tighter ATR for scalping
-    "atr_period": 14,  # PERBAIKAN: Naikkan periode ATR untuk baseline volatilitas yang lebih stabil
+    "atr_period": 20,  # PERBAIKAN: Naikkan periode ATR untuk baseline volatilitas yang lebih stabil
     
     "body_strength_threshold": 0.6,
     "atr_volatility_threshold": 0.0005,
@@ -62,14 +62,14 @@ CONFIG = {
             "volatility_median_window": 50,
             "wick_filter_atr_multiplier": 2.0, # Filter candle sumbu panjang
             "use_or_logic_for_filters": True, # ADX OR wick OK → sinyal lewat
-            "enable_wick_filter": False,
-            "debug_mode": True  # Log kenapa sinyal None (e.g., "Skipped: ADX=17 < 18")
+            "enable_wick_filter": True, 
+            "debug_mode": False  # Log kenapa sinyal None (e.g., "Skipped: ADX=17 < 18")
         },
         "B1": {
             "adx_trending_threshold": 15, # PERBAIKAN: Longgarkan dan selaraskan
             "adx_ranging_threshold": 22, # Aktifkan kembali untuk ranging mode
             "atr_delta_volatile_threshold": 1.5,
-            "rsi_trending_long": 50,
+            "rsi_trending_long": 50, 
             "rsi_trending_short": 50,
             # PERBAIKAN: Beri ruang lebih untuk SL agar tidak kena noise
             "sl_base_multiplier": 2.2,
@@ -81,9 +81,25 @@ CONFIG = {
             "volume_ma_multiplier": 1.0, # Trade kalau vol > 1.0x MA20
             "atr_ma_multiplier": 1.1, # Trade kalau ATR > 1.1x MA20
             "use_or_logic_for_filters": True, # ADX OR wick OK → sinyal lewat
-            "enable_wick_filter": False,
-            "debug_mode": True  # Log kenapa sinyal None
-        }
+            "enable_wick_filter": True, 
+            "debug_mode": False  # Log kenapa sinyal None
+        },
+        "AltcoinVolumeBreakoutHunter": {
+            # --- REKOMENDASI OPTIMASI ---
+            "breakout_window": 15,
+            "volume_spike_multiplier": 4.2,
+            "candle_body_ratio": 0.58,
+            "anti_chase_pct": 0.05,
+            "sl_multiplier": 2.9,
+            "trailing_trigger_rr": 2.2,
+            "trailing_distance_atr": 3.2,
+            "enable_ema_filter": True,
+            "symbol_blacklist": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ZECUSDT", "ADAUSDT", "AVAXUSDT", "LINKUSDT"],
+            # --- PILAR 1: MARKET REGIME FILTER ---
+            "enable_regime_filter": True,
+            "regime_adx_threshold": 19,
+            "regime_atr_pct_threshold": 0.0085 # 0.85%
+        },
     },
 
     # NEW: Essential filters for scalping profitability
@@ -108,23 +124,24 @@ ENTRY_LOGIC = {
     "enabled": True, # Aktifkan/nonaktifkan seluruh logika ini
 
     # --- Kondisi Deteksi ---
-    "continuation_adx_threshold": 15,
+    "continuation_adx_threshold": 20, # PERBAIKAN: Turunkan ambang batas agar profil continuation lebih sering aktif.
     "continuation_volume_spike_ratio": 1.5, # Volume > 1.5x rata-rata
     "pullback_rsi_overbought": 70,
     "pullback_rsi_oversold": 30,
     "pullback_macd_hist_shrink_pct": 0.20, # Hist MACD mengecil 20% dari puncaknya
-    "pullback_bb_retrace_pct": 0.005, # Harga harus retrace 0.5% dari band luar
+    "pullback_bb_retrace_pct": 0.002, # PERBAIKAN: Harga cukup retrace 0.2% dari band luar, membuatnya lebih sensitif
 
     # --- Parameter Eksekusi ---
-    "continuation_offset_pct": 0.001,   # +0.1% (mengejar harga)
-    "pullback_offset_pct": -0.0015,     # -0.15% (menunggu pullback)
-    "default_offset_pct": 0.0002,       # Offset standar jika tidak terdeteksi
+    # PERBAIKAN: Buat continuation lebih agresif, hampir mendekati market order.
+    "continuation_offset_pct": -0.0001, # -0.01% (menunggu pullback sangat tipis, hampir instan)
+    "pullback_offset_pct": -0.0015,     # -0.15% (menunggu pullback yang lebih dalam)
+    "default_offset_pct": 0.0,          # PERBAIKAN KRUSIAL: Set ke 0. Tempatkan limit order tepat di harga sinyal, tidak menunggu pullback.
 
     # --- Parameter Risiko Dinamis ---
-    "continuation_risk_pct": 0.002, # Risiko 0.2% untuk entry agresif
-    "pullback_risk_pct": 0.004,     # Risiko 0.4% untuk entry pullback
+    "continuation_risk_pct": CONFIG["risk_per_trade"] * 0.75, # Risiko 75% dari standar untuk entry agresif
+    "pullback_risk_pct": CONFIG["risk_per_trade"] * 1.25,     # Risiko 125% dari standar untuk entry pullback berkualitas tinggi
 
-    "market_order_adx_threshold": 18 # Gunakan market order jika ADX > 30 (tren sangat kuat)
+    "market_order_adx_threshold": 28 # PERBAIKAN: Hanya gunakan market order jika tren SANGAT kuat (ADX > 28)
 }
 
 LIVE_TRADING_CONFIG = {
@@ -133,7 +150,7 @@ LIVE_TRADING_CONFIG = {
     "max_margin_usage_pct": 0.60,  # DOWN from 0.80 (more conservative)
     
     # CRITICAL FIX: Require stronger consensus
-    "consensus_ratio": 0.40,  # DOWN from 0.75 (Longgarkan untuk lebih banyak trade)
+    "consensus_ratio": 0.01,  # DOWN from 0.75 (Longgarkan untuk lebih banyak trade)
     
     # Circuit breaker - Tightened
     "circuit_breaker_multiplier": 1.3,  # DOWN from 1.5 (exit sooner)
@@ -149,8 +166,19 @@ LIVE_TRADING_CONFIG = {
     "max_daily_loss_pct": 0.05,  # Stop at -5% daily loss
     
     # NEW: Drawdown circuit breaker
-    "max_drawdown_pct": 0.20,  # Stop trading jika drawdown > 20% dari peak
-    "drawdown_cooldown_hours": 2, # Pause selama 2 jam setelah drawdown tercapai
+    "drawdown_circuit_breaker": {
+        "enabled": True,
+        "trigger_pct": 0.10,  # Trigger at 10% drawdown from the last peak
+        "cooldown_hours": [2, 6, 24] # Cooldown hours for 1st, 2nd, and subsequent triggers
+    },
+    # --- PILAR 3: WEEKLY PERFORMANCE KILLSWITCH ---
+    "weekly_killswitch": {
+        "enabled": True,
+        "max_weekly_loss_pct": -0.08, # -8.0%
+        "pause_duration_hours": 72, # 3 hari
+        "reactivate_adx_threshold": 20,
+        "reactivate_atr_pct_threshold": 0.0090 # 0.9%
+    },
 
     # NEW: Position sizing adjustments
     "scale_down_on_loss_streak": True,  # Reduce size after 2 losses
@@ -159,6 +187,17 @@ LIVE_TRADING_CONFIG = {
 
     # NEW: Daily trade limit
     "max_trades_per_day": 20 # Batasi jumlah trade per hari
+}
+
+# ============================================================================
+# NEW: DYNAMIC WHITELIST ROTATION CONFIG (PILAR 2)
+# ============================================================================
+WHITELIST_ROTATION_CONFIG = {
+    "enabled": True,
+    "update_interval_hours": 24 * 7, # Perbarui setiap 7 hari (168 jam)
+    "top_n_coins": 20, # Ambil Top 18-22 koin
+    "exclude_top_market_cap": 10, # Exclude Top 10
+    "max_drawdown_from_ath_pct": 0.35 # Exclude koin yang turun >35% dari ATH 30 hari
 }
 
 # ============================================================================
@@ -192,7 +231,7 @@ SLIPPAGE = {
 EXECUTION = {
     "entry_order_type": "limit", # "limit" atau "market"
     "limit_order_offset_pct": 0.0005, # Offset untuk limit order (positif = sedikit mengejar harga)
-    "limit_order_expiration_candles": 10, # Setelah berapa candle, order limit di backtest dibatalkan
+    "limit_order_expiration_candles": 15, # PERBAIKAN: Beri waktu 75 menit (15 candle * 5m) agar order lebih mungkin terisi
     "partial_tps": [
         (5.0, 0.5),   # 50% baru keluar di 5 RR
         (10.0, 0.3),  # 30% di 10 RR

@@ -181,12 +181,16 @@ class DemoTrader:
                 df_15m = calculate_indicators(df_15m)
                 df_1h = calculate_indicators(df_1h)
 
-                base_data = prepare_data(df_5m, df_15m, df_1h)
+                # Siapkan data gabungan
+                base_data = prepare_data(df_5m, df_15m, df_1h) # type: ignore
                 if base_data is None or base_data.empty:
                     console.log(f"[yellow]Gagal mempersiapkan data untuk {symbol} (Demo), analisis dilewati.[/yellow]")
                     continue
 
-                latest_candle = base_data.iloc[-1]
+                # --- PERBAIKAN KONSISTENSI: Hapus baris dengan NaN sebelum analisis ---
+                base_data_cleaned = base_data.dropna()
+                if base_data_cleaned.empty: continue
+                latest_candle = base_data_cleaned.iloc[-1]
 
                 long_score = 0.0
                 short_score = 0.0
@@ -195,7 +199,7 @@ class DemoTrader:
                 for strategy_name, config in STRATEGY_CONFIG.items():
                     signal_function = config["function"]
                     weight = config["weight"]
-                    long_signals, short_signals, exit_params = signal_function(base_data.copy())
+                    long_signals, short_signals, exit_params = signal_function(base_data_cleaned.copy())
                     
                     if not long_signals.empty and long_signals.iloc[-1]:
                         long_score += weight

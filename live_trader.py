@@ -10,7 +10,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from config import CONFIG, LEVERAGE_MAP, API_KEYS, TELEGRAM, LIVE_TRADING_CONFIG, EXECUTION
+from config import CONFIG, LEVERAGE_MAP, API_KEYS, TELEGRAM, LIVE_TRADING_CONFIG, EXECUTION, WHITELIST_ROTATION_CONFIG
 from indicators import fetch_binance_data, calculate_indicators
 from utils.common_utils import get_all_futures_symbols, get_dynamic_risk_params
 from utils.data_preparer import prepare_data
@@ -56,9 +56,17 @@ class LiveTrader:
         # --- FITUR BARU: State untuk Drawdown Circuit Breaker ---
         self.peak_balance = 0.0
         self.drawdown_cooldown_until = None
+        self.drawdown_trigger_level = 0 # 0: first trigger, 1: second, etc.
         # ---------------------------------------------------------
         self.trade_volume_tracker = {} # {symbol: {'volume': float, 'last_update': datetime}}
         self.avg_5m_volume = {} # {symbol: float}
+        # --- PILAR 2: State untuk Whitelist Dinamis ---
+        self.dynamic_whitelist = set(self.symbols)
+        # --- PILAR 3: State untuk Weekly Killswitch ---
+        self.weekly_pnl_start_balance = None
+        self.weekly_killswitch_pause_until = None
+        self.last_weekly_check_day = None
+
 
     async def log_event(self, message):
         """Menulis event ke file log secara asinkron untuk menghindari pemblokiran."""
@@ -94,7 +102,8 @@ class LiveTrader:
         with open(STATE_FILE, 'w') as f:
             state_to_save = {
                 'active_positions': {s: {'entryPrice': p['entryPrice'], 'positionAmt': p['positionAmt']} for s, p in self.active_positions.items()},
-                'peak_balance': self.peak_balance
+                'peak_balance': self.peak_balance,
+                'drawdown_trigger_level': self.drawdown_trigger_level
             }
             json.dump(state_to_save, f, indent=4)
 
@@ -105,6 +114,7 @@ class LiveTrader:
                 state_data = json.load(f)
                 self.active_positions = state_data.get('active_positions', {})
                 self.peak_balance = state_data.get('peak_balance', 0.0)
+                self.drawdown_trigger_level = state_data.get('drawdown_trigger_level', 0)
             console.log(f"[yellow]State dimuat dari {STATE_FILE}. Posisi: {len(self.active_positions)}, Peak Balance: ${self.peak_balance:.2f}[/yellow]")
 
     async def prefetch_data(self):
@@ -202,6 +212,19 @@ class LiveTrader:
                 if total_exposure >= LIVE_TRADING_CONFIG.get('max_active_positions_limit', 10): # Gunakan batas statis sementara
                     console.log(f"[yellow]SKIP SIGNAL for {symbol}: Batas total eksposur ({total_exposure}) telah tercapai.[/yellow]")
                     continue
+                
+                # --- PILAR 3: Cek Killswitch Pause ---
+                if self.weekly_killswitch_pause_until and datetime.now() < self.weekly_killswitch_pause_until:
+                    # Jika dalam masa pause, jangan proses sinyal
+                    # console.log(f"[grey50]SKIP SIGNAL for {symbol}: Weekly Killswitch active.[/grey50]")
+                    continue
+                elif self.weekly_killswitch_pause_until and datetime.now() >= self.weekly_killswitch_pause_until:
+                    self.weekly_killswitch_pause_until = None # Reset pause jika sudah selesai
+                
+                # --- PILAR 2: Filter berdasarkan Whitelist Dinamis ---
+                if WHITELIST_ROTATION_CONFIG.get("enabled", False) and symbol not in self.dynamic_whitelist:
+                    # console.log(f"[grey50]SKIP SIGNAL for {symbol}: Not in dynamic whitelist.[/grey50]")
+                    continue
 
                 # Pemeriksaan keamanan sekunder: jangan proses jika sudah ada posisi/order untuk simbol ini.
                 # Meskipun sebagian besar sudah ditangani oleh cek total_exposure, ini mencegah race condition.
@@ -227,13 +250,17 @@ class LiveTrader:
                 df_15m = calculate_indicators(df_15m)
                 df_1h = calculate_indicators(df_1h)
 
-                # Siapkan data dengan semua indikator
+                # Siapkan data gabungan
                 base_data = prepare_data(df_5m, df_15m, df_1h)
                 if base_data is None or base_data.empty:
                     console.log(f"[yellow]Gagal mempersiapkan data untuk {symbol}, analisis dilewati.[/yellow]")
                     continue
 
-                latest_candle = base_data.iloc[-1]
+                # --- PERBAIKAN KONSISTENSI: Hapus baris dengan NaN sebelum analisis ---
+                # Ini menyelaraskan logika dengan backtester dan mencegah error dari data warmup.
+                base_data_cleaned = base_data.dropna()
+                if base_data_cleaned.empty: continue
+                latest_candle = base_data_cleaned.iloc[-1]
 
                 # --- REVISI: Implementasi Weighted Consensus Filter ---
                 long_score = 0.0
@@ -245,7 +272,7 @@ class LiveTrader:
                     signal_function = config["function"]
                     weight = config["weight"]
                     # Gunakan .copy() untuk memastikan setiap strategi mendapat data bersih
-                    long_signals, short_signals, exit_params = signal_function(base_data.copy())
+                    long_signals, short_signals, exit_params = signal_function(base_data_cleaned.copy(), symbol=symbol)
                     
                     if not long_signals.empty and long_signals.iloc[-1]:
                         long_score += weight
@@ -291,9 +318,9 @@ class LiveTrader:
                     atr_val = latest_candle[f"ATRr_{CONFIG['atr_period']}"]
                     
                     # --- PERBAIKAN: Tentukan profil entry dinamis ---
-                    # Buat kolom MACD sebelumnya untuk deteksi
-                    base_data['prev_MACDh_12_26_9'] = base_data['MACDh_12_26_9'].shift(1)
-                    latest_candle_with_prev = base_data.iloc[-1]
+                    # Gunakan data yang sudah bersih untuk analisis profil entry
+                    base_data_cleaned['prev_MACDh_12_26_9'] = base_data_cleaned['MACDh_12_26_9'].shift(1)
+                    latest_candle_with_prev = base_data_cleaned.iloc[-1]
                     entry_profile = determine_entry_profile(latest_candle_with_prev)
 
                     # Ambil parameter dari profil yang terdeteksi
@@ -692,26 +719,97 @@ class LiveTrader:
         """Memeriksa drawdown akun secara periodik dan mengaktifkan cooldown jika perlu."""
         while True:
             await asyncio.sleep(60) # Periksa setiap menit
+            cb_config = LIVE_TRADING_CONFIG.get("drawdown_circuit_breaker", {})
+            if not cb_config.get("enabled", False):
+                continue
+
+            # If in cooldown, do nothing
+            if self.drawdown_cooldown_until and datetime.now() < self.drawdown_cooldown_until:
+                continue
+
             try:
                 balance_info = await self.exchange.fetch_balance()
                 current_balance = balance_info.get('USDT', {}).get('total', 0)
 
-                # Update peak balance
+                # PERBAIKAN: Update peak balance setiap kali balance saat ini lebih tinggi.
+                # Ini akan "mengunci" profit dan membuat drawdown lebih sensitif.
                 if current_balance > self.peak_balance:
                     self.peak_balance = current_balance
-                    self.save_positions_state() # Simpan peak baru
-
+                
                 # Cek drawdown
                 drawdown_pct = (self.peak_balance - current_balance) / self.peak_balance if self.peak_balance > 0 else 0
-                if drawdown_pct > LIVE_TRADING_CONFIG['max_drawdown_pct']:
-                    cooldown_hours = LIVE_TRADING_CONFIG['drawdown_cooldown_hours']
+                if drawdown_pct > cb_config.get("trigger_pct", 0.10):
+                    cooldown_levels = cb_config.get("cooldown_hours", [2, 6, 24])
+                    cooldown_hours = cooldown_levels[min(self.drawdown_trigger_level, len(cooldown_levels) - 1)]
                     self.drawdown_cooldown_until = datetime.now() + pd.Timedelta(hours=cooldown_hours)
-                    msg = f"🚨 *DRAWDOWN CIRCUIT BREAKER TERPICU!* 🚨\nDrawdown mencapai {drawdown_pct:.2%}. Semua trading dihentikan selama {cooldown_hours} jam."
+                    msg = f"🚨 *DRAWDOWN CIRCUIT BREAKER (Level {self.drawdown_trigger_level + 1}) TERPICU!* 🚨\nDrawdown mencapai {drawdown_pct:.2%}. Semua trading dihentikan selama {cooldown_hours} jam."
                     await self.log_event(msg.replace("*", ""))
                     await notifier.send_message(msg)
+                    # PERBAIKAN KRUSIAL: Reset peak balance ke balance saat ini untuk siklus berikutnya.
+                    self.drawdown_trigger_level += 1
+                    self.save_positions_state() # Save the new state
             except Exception as e:
                 console.log(f"[red]Error di drawdown_circuit_breaker_check: {e}[/red]")
     
+    # --- PILAR 3: WEEKLY PERFORMANCE KILLSWITCH ---
+    async def weekly_performance_killswitch(self):
+        """
+        Memeriksa PnL mingguan. Jika kerugian melebihi ambang batas, hentikan trading sementara.
+        """
+        ks_config = LIVE_TRADING_CONFIG.get("weekly_killswitch", {})
+        if not ks_config.get("enabled", False):
+            console.log("[yellow]Weekly Performance Killswitch dinonaktifkan.[/yellow]")
+            return
+
+        while True:
+            await asyncio.sleep(3600) # Periksa setiap jam
+            now = datetime.now()
+            current_day_of_week = now.weekday() # Senin = 0, Minggu = 6
+
+            # Reset pada hari Senin
+            if current_day_of_week == 0 and self.last_weekly_check_day != 0:
+                try:
+                    balance_info = await self.exchange.fetch_balance()
+                    self.weekly_pnl_start_balance = balance_info.get('USDT', {}).get('total', 0)
+                    self.weekly_killswitch_pause_until = None # Hapus pause saat minggu baru dimulai
+                    msg = f"KILLSWITCH: Minggu baru dimulai. Balance awal PnL mingguan diatur ke ${self.weekly_pnl_start_balance:.2f}."
+                    console.log(f"[cyan]{msg}[/cyan]")
+                    await self.log_event(msg)
+                except Exception as e:
+                    console.log(f"[red]KILLSWITCH: Gagal mereset PnL mingguan: {e}[/red]")
+            
+            self.last_weekly_check_day = current_day_of_week
+
+            # Jangan periksa jika belum ada balance awal atau sedang dalam masa pause
+            if not self.weekly_pnl_start_balance or (self.weekly_killswitch_pause_until and now < self.weekly_killswitch_pause_until):
+                continue
+
+            try:
+                balance_info = await self.exchange.fetch_balance()
+                current_balance = balance_info.get('USDT', {}).get('total', 0)
+                
+                pnl_pct = (current_balance - self.weekly_pnl_start_balance) / self.weekly_pnl_start_balance
+
+                if pnl_pct <= ks_config.get("max_weekly_loss_pct", -0.08):
+                    pause_hours = ks_config.get("pause_duration_hours", 72)
+                    self.weekly_killswitch_pause_until = now + pd.Timedelta(hours=pause_hours)
+                    
+                    # Tutup semua posisi aktif
+                    active_symbols_to_close = list(self.active_positions.keys())
+                    for symbol in active_symbols_to_close:
+                        await self.close_position_manually(symbol, "Weekly Killswitch Triggered")
+
+                    msg = (f"🚨 *WEEKLY KILLSWITCH TERPICU!* 🚨\n"
+                           f"Kerugian mingguan mencapai {pnl_pct:.2%}. "
+                           f"Semua trading dihentikan selama {pause_hours} jam.")
+                    
+                    console.log(f"[bold red]{msg.replace('*', '')}[/bold red]")
+                    await self.log_event(msg.replace('*', ''))
+                    await notifier.send_message(msg)
+
+            except Exception as e:
+                console.log(f"[red]Error di weekly_performance_killswitch: {e}[/red]")
+
     # --- FITUR BARU: Logika untuk inisialisasi target TP parsial ---
     def initialize_partial_tp_targets(self, symbol):
         """Menghitung dan menyimpan target TP parsial untuk posisi yang baru dibuka."""
@@ -999,6 +1097,9 @@ class LiveTrader:
             all_tasks.append(self.trailing_stop_manager())
             # --- FITUR BARU: Jalankan Drawdown Circuit Breaker ---
             all_tasks.append(self.drawdown_circuit_breaker_check())
+        
+        # --- PILAR 2: Jalankan task untuk rotasi whitelist ---
+        all_tasks.append(self.dynamic_whitelist_rotator())
 
         # Jalankan semua task yang sudah dikumpulkan
         await asyncio.gather(*all_tasks)
@@ -1053,6 +1154,73 @@ class LiveTrader:
                 await self.log_event(log_msg)
                 console.log(f"[bold red]Trade watcher error untuk {symbol}: {e}. Mencoba menghubungkan ulang dalam 30 detik...[/bold red]")
                 await asyncio.sleep(30)
+    
+    # --- PILAR 2: DYNAMIC WEEKLY WHITELIST ROTATION ---
+    async def dynamic_whitelist_rotator(self):
+        """
+        Secara periodik memperbarui daftar pantau simbol berdasarkan momentum volume dan harga.
+        """
+        if not WHITELIST_ROTATION_CONFIG.get("enabled", False):
+            console.log("[yellow]Dynamic Whitelist Rotator dinonaktifkan.[/yellow]")
+            return
+
+        while True:
+            try:
+                console.log("[bold cyan]ROTATION ENGINE: Memulai pembaruan whitelist dinamis...[/bold cyan]")
+                
+                # 1. Dapatkan semua ticker futures
+                tickers = await self.exchange.fetch_tickers()
+                futures_tickers = {s: t for s, t in tickers.items() if '/USDT' in s and ':USDT' in s}
+
+                # 2. Filter Top N Market Cap
+                sorted_by_mc = sorted(futures_tickers.values(), key=lambda t: t.get('quoteVolume', 0) * t.get('last', 1), reverse=True)
+                top_mc_symbols = {t['symbol'] for t in sorted_by_mc[:WHITELIST_ROTATION_CONFIG.get("exclude_top_market_cap", 10)]}
+
+                scores = []
+                # Ambil 200 simbol teratas berdasarkan volume untuk dianalisis
+                top_volume_symbols = [t['symbol'] for t in sorted_by_mc[:200]]
+
+                for symbol in top_volume_symbols:
+                    if symbol in top_mc_symbols:
+                        continue
+
+                    # 3. Ambil data historis untuk kalkulasi skor
+                    # Kita butuh data 30 hari + 7 hari = 37 hari
+                    df_daily, _ = await asyncio.get_event_loop().run_in_executor(None, self.exchange.fetch_ohlcv, symbol, '1d', limit=37)
+                    if df_daily is None or len(df_daily) < 37:
+                        continue
+                    
+                    df = pd.DataFrame(df_daily, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                    
+                    # 4. Hitung Skor & Filter
+                    volume_7d = df['volume'].tail(7).mean()
+                    volume_30d_ma = df['volume'].rolling(30).mean().iloc[-1]
+                    close_7d_gain = (df['close'].iloc[-1] / df['close'].iloc[-8] - 1) if len(df) > 7 else 0
+                    
+                    # Filter ATH Drawdown
+                    ath_30_days = df['high'].tail(30).max()
+                    drawdown_from_ath = (ath_30_days - df['close'].iloc[-1]) / ath_30_days
+                    if drawdown_from_ath > WHITELIST_ROTATION_CONFIG.get("max_drawdown_from_ath_pct", 0.35):
+                        continue
+
+                    if volume_30d_ma > 0:
+                        score = (volume_7d / volume_30d_ma) * (close_7d_gain + 1)
+                        scores.append({'symbol': symbol, 'score': score})
+
+                # 5. Rank dan pilih Top N
+                sorted_scores = sorted(scores, key=lambda x: x['score'], reverse=True)
+                new_whitelist = {item['symbol'] for item in sorted_scores[:WHITELIST_ROTATION_CONFIG.get("top_n_coins", 20)]}
+                
+                self.dynamic_whitelist = new_whitelist
+                msg = f"ROTATION ENGINE: Whitelist diperbarui. {len(self.dynamic_whitelist)} koin aktif: {', '.join(list(self.dynamic_whitelist)[:5])}..."
+                console.log(f"[bold green]{msg}[/bold green]")
+                await self.log_event(msg)
+                await notifier.send_message(f"🔄 *Whitelist Diperbarui*\n{len(self.dynamic_whitelist)} koin 'panas' baru telah dipilih untuk minggu ini.")
+
+            except Exception as e:
+                console.log(f"[red]Error di dynamic_whitelist_rotator: {e}[/red]")
+            
+            await asyncio.sleep(WHITELIST_ROTATION_CONFIG.get("update_interval_hours", 24*7) * 3600)
 
 async def main():
     """Fungsi utama async untuk menjalankan bot dan menangani cleanup."""

@@ -101,7 +101,7 @@ if __name__ == "__main__":
         console.log(f"\n[bold magenta]===== Running Full Portfolio Simulation for: {strat_name} =====[/bold magenta]")
         
         # Buat instance backtester baru untuk setiap strategi untuk memastikan isolasi
-        backtester = PortfolioBacktester(initial_balance=CONFIG["account_balance"])
+        backtester = PortfolioBacktester(initial_balance=CONFIG["account_balance"], simulate_latency=False)
         all_signals = []
 
         # Hasilkan sinyal HANYA untuk strategi saat ini di semua simbol

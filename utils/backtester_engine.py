@@ -19,7 +19,7 @@ class PortfolioBacktester:
     A backtester that manages a single compounding portfolio across multiple assets and strategies.
     This class is the core engine for both market_scanner and strategy_comparation.
     """
-    def __init__(self, initial_balance):
+    def __init__(self, initial_balance, simulate_latency=False):
         self.balance = initial_balance
         self.initial_balance = initial_balance
         self.trades = []
@@ -31,7 +31,14 @@ class PortfolioBacktester:
         # --- FITUR BARU: State untuk Drawdown Circuit Breaker ---
         self.peak_balance = initial_balance
         self.drawdown_cooldown_until = None
+        self.drawdown_trigger_level = 0 # 0: first trigger, 1: second, etc.
+        # --- PILAR 3: State untuk Weekly Killswitch (Backtest) ---
+        self.weekly_pnl_start_balance = initial_balance
+        self.weekly_killswitch_pause_until = None
+        self.last_weekly_check_day = None
+        self.weekly_killswitch_triggers = 0
         # ---------------------------------------------------------
+        self.simulate_latency = simulate_latency # Kontrol untuk jeda buatan
         self.exchange = None # Akan diinisialisasi oleh skrip pemanggil
         # NEW: Track fill statistics
         self.limit_order_stats = {
@@ -41,7 +48,46 @@ class PortfolioBacktester:
             'fill_rate': 0.0
         }
 
-    def fetch_and_prepare_symbol_data(self, symbol, limit):
+    def rank_symbols_by_historical_volume(self, symbols: list, start_date_str: str, top_n: int) -> list:
+        """
+        Mengambil data volume historis untuk daftar simbol dan merangkingnya.
+        Ini digunakan untuk mendapatkan daftar putar yang relevan untuk periode backtest.
+        """
+        console.log(f"Mulai mengambil data volume historis untuk {len(symbols)} simbol...")
+        
+        # Tentukan periode pengambilan data volume (misal: 7 hari pertama dari start_date)
+        period_start = pd.to_datetime(start_date_str)
+        period_end = period_start + pd.Timedelta(days=7)
+        
+        symbol_volumes = []
+        
+        # Gunakan progress bar dari Rich untuk visualisasi
+        from rich.progress import track
+
+        for symbol in track(symbols, description="Menganalisis volume historis..."):
+            try:
+                # Ambil data harian ('1d') untuk efisiensi
+                df, from_cache = fetch_binance_data_sync(
+                    self.exchange, symbol, '1d', 
+                    start_date=period_start.strftime('%Y-%m-%d'), 
+                    end_date=period_end.strftime('%Y-%m-%d'),
+                    use_cache=True
+                )
+                if df is not None and not df.empty and 'volume' in df.columns:
+                    # Hitung total volume dalam USD (asumsi harga close)
+                    total_volume_usd = (df['volume'] * df['close']).sum()
+                    symbol_volumes.append((symbol, total_volume_usd))
+            except Exception as e:
+                # Abaikan simbol yang gagal diambil datanya
+                # console.log(f"[grey50]Gagal mengambil data volume untuk {symbol}: {e}[/grey50]")
+                continue
+        
+        # Urutkan berdasarkan total volume USD
+        sorted_symbols = sorted(symbol_volumes, key=lambda x: x[1], reverse=True)
+        
+        return [s[0] for s in sorted_symbols[:top_n]]
+
+    def fetch_and_prepare_symbol_data(self, symbol, limit, start_date, end_date):
         """Helper function to fetch and prepare data for a single symbol."""
         buffer = 200 
         signal_tf = CONFIG['timeframe_signal']
@@ -52,13 +98,19 @@ class PortfolioBacktester:
         else:
             macro_tf = '1h'
 
-        limit_signal = limit
-        limit_trend = (limit_signal // max(1, (pd.to_timedelta(trend_tf).total_seconds() / pd.to_timedelta(signal_tf).total_seconds()))) + buffer
-        limit_macro = (limit_signal // max(1, (pd.to_timedelta(macro_tf).total_seconds() / pd.to_timedelta(signal_tf).total_seconds()))) + buffer
+        # PERBAIKAN: Gunakan start_date dan end_date jika ada, jika tidak, gunakan limit
+        if start_date:
+            df_signal, from_cache_signal = fetch_binance_data_sync(self.exchange, symbol, signal_tf, start_date=start_date, end_date=end_date, use_cache=True)
+            df_trend, from_cache_trend = fetch_binance_data_sync(self.exchange, symbol, trend_tf, start_date=start_date, end_date=end_date, use_cache=True)
+            df_macro, from_cache_macro = fetch_binance_data_sync(self.exchange, symbol, macro_tf, start_date=start_date, end_date=end_date, use_cache=True)
+        else:
+            limit_signal = limit
+            limit_trend = (limit_signal // max(1, (pd.to_timedelta(trend_tf).total_seconds() / pd.to_timedelta(signal_tf).total_seconds()))) + buffer
+            limit_macro = (limit_signal // max(1, (pd.to_timedelta(macro_tf).total_seconds() / pd.to_timedelta(signal_tf).total_seconds()))) + buffer
 
-        df_signal, from_cache_signal = fetch_binance_data_sync(self.exchange, symbol, signal_tf, limit=int(limit_signal), use_cache=True)
-        df_trend, from_cache_trend = fetch_binance_data_sync(self.exchange, symbol, trend_tf, limit=int(limit_trend), use_cache=True)
-        df_macro, from_cache_macro = fetch_binance_data_sync(self.exchange, symbol, macro_tf, limit=int(limit_macro), use_cache=True)
+            df_signal, from_cache_signal = fetch_binance_data_sync(self.exchange, symbol, signal_tf, limit=int(limit_signal), use_cache=True)
+            df_trend, from_cache_trend = fetch_binance_data_sync(self.exchange, symbol, trend_tf, limit=int(limit_trend), use_cache=True)
+            df_macro, from_cache_macro = fetch_binance_data_sync(self.exchange, symbol, macro_tf, limit=int(limit_macro), use_cache=True)
 
         if any(df is None for df in [df_signal, df_trend, df_macro]):
             return None, False
@@ -98,9 +150,10 @@ class PortfolioBacktester:
         except KeyError:
             return
         
-        # Execution Realism di Backtester: Sim latency
-        latency_seconds = np.random.uniform(0.1, 0.5)
-        time.sleep(latency_seconds)
+        # Execution Realism di Backtester: Sim latency (hanya jika diaktifkan)
+        if self.simulate_latency:
+            latency_seconds = np.random.uniform(0.1, 0.5)
+            time.sleep(latency_seconds)
         
         signal_row_dict = signal_row.to_dict()
         signal_row_dict['signal'] = signal['signal']
@@ -135,10 +188,12 @@ class PortfolioBacktester:
             base_price = order_details['limit_price'] # Gunakan 'limit_price' sebagai proxy harga sinyal
             entry_fee_rate = FEES['taker']
         else: # limit order
-            base_price = order_details['limit_price']
+            # PERBAIKAN KRUSIAL: Gunakan harga fill aktual dari simulasi, bukan harga limit awal.
+            base_price = order_details.get('actual_fill_price', order_details['limit_price'])
             entry_fee_rate = FEES['maker']
 
-        entry_price = base_price * (1 + SLIPPAGE['pct'] if order_details['direction'] == 'LONG' else 1 - SLIPPAGE['pct'])
+        # PERBAIKAN: Hapus slippage tambahan di sini. Slippage sudah disimulasikan di check_limit_order_fill_realistic.
+        entry_price = base_price
         entry_fee = order_details['position_size_usd'] * entry_fee_rate
 
         # --- PERBAIKAN KRUSIAL: Hitung ulang SL/TP dari ACTUAL entry price ---
@@ -152,7 +207,7 @@ class PortfolioBacktester:
 
         console.log(
             f"[green]Opening trade {self.trade_id_counter} on {symbol} ({order_details['strategy']}). "
-            f"Limit: {order_details['limit_price']:.5f}, Entry (w/ slippage): {entry_price:.5f}[/green]"
+            f"Limit: {order_details['limit_price']:.5f}, Entry: {entry_price:.5f}[/green]"
         )
 
         self.active_positions[symbol] = {
@@ -163,8 +218,8 @@ class PortfolioBacktester:
             'strategy': order_details['strategy'], 'entry_fee': entry_fee,
         }
         # --- FITUR BARU: Inisialisasi untuk Multi-Level TP ---
-        self.active_positions[symbol]['initial_position_size_usd'] = order_details['position_size_usd']
-        self.active_positions[symbol]['remaining_position_usd'] = order_details['position_size_usd']
+        self.active_positions[symbol]['initial_position_size_usd'] = order_details['position_size_usd'] # Simpan ukuran awal
+        self.active_positions[symbol]['remaining_position_usd'] = order_details['position_size_usd'] # Ukuran sisa saat ini
         self.active_positions[symbol]['partial_tp_targets'] = []
 
         # PERBAIKAN: Gunakan stop_loss_dist yang sudah dihitung, bukan initial_sl yang sudah tidak ada
@@ -186,6 +241,8 @@ class PortfolioBacktester:
         if symbol not in self.active_positions: return
         trade_details = self.active_positions[symbol]
         
+        # --- PERBAIKAN KRUSIAL: Tentukan ukuran yang akan ditutup ---
+        # Jika size_to_close_usd tidak diberikan, berarti ini adalah penutupan penuh.
         direction = trade_details['direction']
         entry_price = trade_details['entry_price']
         position_size_to_close = size_to_close_usd if size_to_close_usd is not None else trade_details['remaining_position_usd']
@@ -193,7 +250,10 @@ class PortfolioBacktester:
         actual_exit_price = exit_price * (1 - SLIPPAGE['pct'] if direction == 'LONG' else 1 + SLIPPAGE['pct'])
         exit_fee_rate = FEES['maker'] if 'Take Profit' in exit_reason else FEES['taker']
         exit_fee = position_size_to_close * exit_fee_rate
-        total_fees = trade_details['entry_fee'] + exit_fee
+        
+        # --- PERBAIKAN: Hitung fee masuk berdasarkan proporsi ukuran yang ditutup ---
+        entry_fee_proportional = trade_details['entry_fee'] * (position_size_to_close / trade_details['initial_position_size_usd'])
+        total_fees = entry_fee_proportional + exit_fee
 
         pnl_pct = (actual_exit_price - entry_price) / entry_price if direction == 'LONG' else (entry_price - actual_exit_price) / entry_price
         pnl_usd = pnl_pct * position_size_to_close if pd.notna(pnl_pct) else 0.0
@@ -204,6 +264,9 @@ class PortfolioBacktester:
         
         # --- FITUR BARU: Update Peak Balance setelah setiap trade ---
         if self.balance > self.peak_balance:
+            self.peak_balance = self.balance
+        # PERBAIKAN: Jika cooldown sudah lewat, reset peak balance ke balance saat ini
+        if self.drawdown_cooldown_until and exit_time >= self.drawdown_cooldown_until:
             self.peak_balance = self.balance
         # ---------------------------------------------------------
 
@@ -218,7 +281,7 @@ class PortfolioBacktester:
 
         trade_details['remaining_position_usd'] -= position_size_to_close
 
-        if trade_details['remaining_position_usd'] < 1: # Jika posisi sudah habis
+        if trade_details['remaining_position_usd'] < 1 or size_to_close_usd is None: # Jika posisi habis atau ini penutupan penuh
             console.log(
                 f"Closed trade {trade_details['id']} on {symbol}. Reason: {exit_reason}. "
                 f"Net PnL: ${net_pnl_usd:,.2f}. New Balance: ${self.balance:,.2f}"
@@ -237,6 +300,53 @@ class PortfolioBacktester:
             return False # Masih dalam masa cooldown
         return True # Boleh trading
         
+    def check_weekly_killswitch(self, current_time):
+        """
+        PILAR 3: Simulates the Weekly Performance Killswitch for backtesting.
+        Checks PnL for the week. If loss exceeds threshold, pauses trading.
+        """
+        ks_config = LIVE_TRADING_CONFIG.get("weekly_killswitch", {})
+        if not ks_config.get("enabled", False):
+            return True # Killswitch is disabled, so always allow trading
+
+        # Check if we are currently in a pause period
+        if self.weekly_killswitch_pause_until and current_time < self.weekly_killswitch_pause_until:
+            return False # Trading is paused
+        elif self.weekly_killswitch_pause_until and current_time >= self.weekly_killswitch_pause_until:
+            self.weekly_killswitch_pause_until = None # Pause period is over
+
+        current_day_of_week = current_time.weekday() # Monday=0, Sunday=6
+
+        # Reset on Monday
+        if current_day_of_week == 0 and self.last_weekly_check_day != 6 and self.last_weekly_check_day is not None:
+            self.weekly_pnl_start_balance = self.balance
+            console.log(f"[cyan]KILLSWITCH (Backtest): New week starting at {current_time.date()}. Weekly PnL reset. Start Balance: ${self.balance:,.2f}[/cyan]")
+
+        self.last_weekly_check_day = current_day_of_week
+
+        # Calculate PnL percentage for the current week
+        if self.weekly_pnl_start_balance > 0:
+            pnl_pct = (self.balance - self.weekly_pnl_start_balance) / self.weekly_pnl_start_balance
+        else:
+            pnl_pct = 0
+
+        # Check if the loss threshold is breached
+        if pnl_pct <= ks_config.get("max_weekly_loss_pct", -0.08):
+            pause_hours = ks_config.get("pause_duration_hours", 72)
+            self.weekly_killswitch_pause_until = current_time + pd.Timedelta(hours=pause_hours)
+            self.weekly_killswitch_triggers += 1
+
+            msg = (f"🚨 *WEEKLY KILLSWITCH (Backtest) TRIGGERED!* 🚨\n"
+                   f"   Time: {current_time}\n"
+                   f"   Weekly Loss: {pnl_pct:.2%}. Trading paused for {pause_hours} hours.")
+            console.log(f"[bold red]{msg.replace('*', '')}[/bold red]")
+
+            # Close all active positions
+            for symbol in list(self.active_positions.keys()):
+                self.close_trade(symbol, self.active_positions[symbol]['entry_price'], current_time, "Weekly Killswitch Triggered")
+            return False # Stop trading immediately
+        return True
+
     def create_pending_order(self, signal_row, signal_time, full_data, exit_params, symbol, current_risk_per_trade, default_leverage):
         if symbol in self.pending_orders: return
 
@@ -265,7 +375,7 @@ class PortfolioBacktester:
         risk_for_this_trade = entry_profile['risk_pct']
         entry_order_type = entry_profile['order_type']
         
-        limit_price = signal_price * (1 + limit_offset_pct) if direction == 'LONG' else signal_price * (1 - limit_offset_pct)
+        limit_price = signal_price * (1 - limit_offset_pct) if direction == 'LONG' else signal_price * (1 + limit_offset_pct)
         expiration_candles = EXECUTION.get("limit_order_expiration_candles", 5)
 
         sl_multiplier = exit_params.get('sl_multiplier', 1.5)
@@ -328,20 +438,27 @@ class PortfolioBacktester:
 
     def check_and_trigger_drawdown(self, current_time):
         """Memeriksa apakah drawdown terpicu dan memulai cooldown jika perlu."""
+        cb_config = LIVE_TRADING_CONFIG.get("drawdown_circuit_breaker", {})
+        if not cb_config.get("enabled", False):
+            return False
+
+        # If in cooldown, do nothing
+        if self.drawdown_cooldown_until and current_time < self.drawdown_cooldown_until:
+            return False
+
         drawdown_pct = (self.peak_balance - self.balance) / self.peak_balance if self.peak_balance > 0 else 0
-        if drawdown_pct > LIVE_TRADING_CONFIG['max_drawdown_pct']:
-            if self.drawdown_cooldown_until is None or current_time > self.drawdown_cooldown_until:
-                # Enforce max_daily_loss_pct
-                daily_pnl_pct = self.get_daily_pnl_pct(current_time)
-                if daily_pnl_pct < -LIVE_TRADING_CONFIG.get('max_daily_loss_pct', 0.05):
-                    console.log(f"🚨 [bold red]MAX DAILY LOSS REACHED![/bold red] PnL Hari Ini: {daily_pnl_pct:.2%}. Trading dihentikan untuk hari ini.")
-                    # Set cooldown until next day
-                    self.drawdown_cooldown_until = (current_time + pd.Timedelta(days=1)).replace(hour=0, minute=0, second=0)
-                    return True
-                cooldown_hours = LIVE_TRADING_CONFIG['drawdown_cooldown_hours']
-                self.drawdown_cooldown_until = current_time + pd.Timedelta(hours=cooldown_hours)
-                console.log(f"🚨 [bold red]DRAWDOWN CIRCUIT BREAKER TERPICU![/bold red] Drawdown: {drawdown_pct:.2%}. Trading dihentikan selama {cooldown_hours} jam.")
-                return True
+        trigger_pct = cb_config.get("trigger_pct", 0.10)
+
+        if drawdown_pct > trigger_pct:
+            cooldown_levels = cb_config.get("cooldown_hours", [2, 6, 24])
+            cooldown_hours = cooldown_levels[min(self.drawdown_trigger_level, len(cooldown_levels) - 1)]
+            
+            self.drawdown_cooldown_until = current_time + pd.Timedelta(hours=cooldown_hours)
+            console.log(f"🚨 [bold red]DRAWDOWN CIRCUIT BREAKER (Level {self.drawdown_trigger_level + 1}) TERPICU![/bold red] Drawdown: {drawdown_pct:.2%}. Trading dihentikan selama {cooldown_hours} jam.")
+            
+            self.peak_balance = self.balance # PERBAIKAN KRUSIAL: Reset peak balance ke balance saat ini untuk siklus berikutnya.
+            self.drawdown_trigger_level += 1 # Increment for next trigger
+            return True # Cooldown is now active
         return False
 
     def close_remaining_trades(self, all_data):
@@ -358,6 +475,8 @@ class PortfolioBacktester:
                 continue
 
             last_candle = full_data.iloc[-1]
+            # --- PERBAIKAN KRUSIAL: Panggil close_trade tanpa size_to_close_usd ---
+            # Ini akan secara otomatis menutup seluruh sisa posisi.
             self.close_trade(symbol, last_candle['close'], last_candle.name, "End of Data")
 
     def get_results_summary(self):
@@ -375,19 +494,6 @@ class PortfolioBacktester:
         if not self.trades: return 0.0
         trades_df = pd.DataFrame(self.trades)
         trades_df['Exit Time'] = pd.to_datetime(trades_df['Exit Time'])
-        today_trades = trades_df[trades_df['Exit Time'].dt.date == current_time.date()]
-        if today_trades.empty: return 0.0
-        return today_trades['PnL (USD)'].sum() / self.initial_balance
-
-        trades_df = pd.DataFrame(self.trades)
-        net_profit_pct = ((self.balance - self.initial_balance) / self.initial_balance) * 100
-        total_trades = len(trades_df)
-        wins = len(trades_df[trades_df['PnL (USD)'] > 0])
-        win_rate = (wins / total_trades) * 100 if total_trades > 0 else 0
-
-        gross_profit = trades_df[trades_df['PnL (USD)'] > 0]['PnL (USD)'].sum()
-        gross_loss = abs(trades_df[trades_df['PnL (USD)'] < 0]['PnL (USD)'].sum())
-        profit_factor = gross_profit / gross_loss if gross_loss != 0 else float('inf')
 
         # Simplified RR calculation for summary
         avg_rr = CONFIG.get('risk_reward_ratio', 1.5)
@@ -401,6 +507,11 @@ class PortfolioBacktester:
         trades_df['Exit Time'] = pd.to_datetime(trades_df['Exit Time'])
         trades_df['duration'] = (trades_df['Exit Time'] - trades_df['Entry Time']).dt.total_seconds() / 60
         avg_trade_duration = trades_df['duration'].mean()
+
+        # --- PERBAIKAN: Pindahkan logika PnL harian ke sini ---
+        today_trades = trades_df[trades_df['Exit Time'].dt.date == current_time.date()]
+        if today_trades.empty: return 0.0
+        return today_trades['PnL (USD)'].sum() / self.initial_balance
 
         daily_returns = trades_df.set_index('Exit Time')['PnL (USD)'].resample('D').sum() / self.initial_balance
         sharpe_ratio = (daily_returns.mean() / daily_returns.std()) * np.sqrt(365) if daily_returns.std() != 0 else 0
@@ -489,6 +600,8 @@ class PortfolioBacktester:
         summary_table.add_row("Overall Win Rate", f"{win_rate:.2f}%")
         summary_table.add_row("Profit Factor", f"{profit_factor:.2f}")
         summary_table.add_row("Max Drawdown", f"[red]{max_drawdown:.2f}%[/red]")
+        summary_table.add_row("CB Triggers", str(self.drawdown_trigger_level))
+        summary_table.add_row("Weekly Killswitch Triggers", str(self.weekly_killswitch_triggers))
         console.print(summary_table)
 
         output_dir = Path('output')
@@ -497,7 +610,21 @@ class PortfolioBacktester:
         trades_df.to_csv(filename, index=False)
         console.log(f"\n[bold]Full trade log saved to '{filename}'[/bold]")
         
-        self._log_results_to_markdown(args=args, net_profit=net_profit, net_profit_pct=net_profit_pct, total_trades=total_trades, win_rate=win_rate, profit_factor=profit_factor, max_drawdown=max_drawdown, duration_str=duration_str)
+        self._log_results_to_markdown(
+            args=args, 
+            net_profit=net_profit, 
+            net_profit_pct=net_profit_pct, 
+            total_trades=total_trades, 
+            win_rate=win_rate, 
+            profit_factor=profit_factor, 
+            max_drawdown=max_drawdown, 
+            duration_str=duration_str,
+            start_date=start_date,
+            end_date=end_date,
+            long_win_rate=long_win_rate, total_long=total_long,
+            short_win_rate=short_win_rate, total_short=total_short,
+            exit_logic_mode=exit_logic_mode,
+            drawdown_triggers=self.drawdown_trigger_level)
 
     def _log_results_to_markdown(self, args, **kwargs):
         """Secara otomatis menambahkan entri baru ke BACKTEST_LOG.md."""
@@ -534,17 +661,32 @@ class PortfolioBacktester:
         # Perbaikan format Net Profit untuk nilai negatif
         profit_color = "green" if kwargs['net_profit'] >= 0 else "red"
         profit_sign = "+" if kwargs['net_profit'] >= 0 else ""
+        
+        # Format win rate Long/Short
+        long_wr_str = f"{kwargs.get('total_long', 0)} trades ({kwargs.get('long_win_rate', 0):.2f}%)"
+        short_wr_str = f"{kwargs.get('total_short', 0)} trades ({kwargs.get('short_win_rate', 0):.2f}%)"
+
         results_table = (
             f"| Metrik            | Nilai                      |\n"
             f"| ----------------- | -------------------------- |\n"
             f"| Saldo Awal        | ${self.initial_balance:,.2f}                     |\n"
             f"| Saldo Akhir       | ${self.balance:,.2f}                     |\n"
-            f"| **Net Profit**    | **[{profit_color}]${kwargs['net_profit']:,.2f} ({profit_sign}{kwargs['net_profit_pct']:.2f}%)[/{profit_color}]**       |\n"
+            f"| **Net Profit**    | **<span style='color:{profit_color};'>${kwargs['net_profit']:,.2f} ({profit_sign}{kwargs['net_profit_pct']:.2f}%)</span>** |\n"
             f"| Total Trades      | {kwargs['total_trades']}                         |\n"
             f"| Win Rate          | {kwargs['win_rate']:.2f}%                     |\n"
+            f"|  - Long Win Rate  | {long_wr_str}              |\n"
+            f"|  - Short Win Rate | {short_wr_str}             |\n"
             f"| Profit Factor     | {kwargs['profit_factor']:.2f}                       |\n"
             f"| Max Drawdown      | {kwargs['max_drawdown']:.2f}%                      |\n"
+            f"| CB Triggers       | {kwargs.get('drawdown_triggers', 0)}                         |\n"
+            f"| Weekly Killswitch | {self.weekly_killswitch_triggers} Triggers                     |\n"
         )
+
+        # Format filter config yang aktif
+        active_filters = [f"`{key}`" for key, value in CONFIG.get("signal_filters", {}).items() if value]
+        active_filters_str = ", ".join(active_filters) if active_filters else "Tidak ada"
+        start_date_str = kwargs.get('start_date').strftime('%Y-%m-%d') if kwargs.get('start_date') else "N/A"
+        end_date_str = kwargs.get('end_date').strftime('%Y-%m-%d') if kwargs.get('end_date') else "N/A"
 
         log_entry = (
             f"\n---\n\n"
@@ -552,8 +694,9 @@ class PortfolioBacktester:
             f"**Parameter:**\n"
             f"-   **Simbol:** Top {args.max_symbols} (berdasarkan volume)\n"
             f"-   **Candles:** {args.limit}\n"
-            f"-   **Periode:** ~{kwargs['duration_str']}\n"
-            f"-   **Mode Exit:** {'Dinamis (Advanced)' if LIVE_TRADING_CONFIG.get('use_advanced_exit_logic', True) else 'Statis (SL/TP Bursa)'}\n\n"
+            f"-   **Periode:** {start_date_str} s/d {end_date_str} (~{kwargs['duration_str']})\n"
+            f"-   **Mode Exit:** {kwargs.get('exit_logic_mode', 'N/A')}\n\n"
+            f"**Filter Aktif:** {active_filters_str}\n\n"
             f"**Konfigurasi & Performa Strategi:**\n\n"
             f"{strategy_table_header}"
             f"{strategy_table_divider}"
@@ -594,12 +737,13 @@ class PortfolioBacktester:
         if filled:
             # Calculate partial fill fraction
             partial_fill_fraction = min(1.0, (candle['volume'] / avg_volume) * 2) if avg_volume > 0 else 1.0
-            
-            # Calculate actual fill price
+
+            # PERBAIKAN KRUSIAL: Simulasi fill price yang realistis untuk limit order.
+            # Harga fill harus SAMA DENGAN atau LEBIH BAIK dari harga limit.
             if direction == 'LONG':
-                actual_fill_price = limit_price * (1 + np.random.uniform(0, 0.0002))
+                actual_fill_price = min(limit_price, candle['open']) # Ambil harga open jika gap down melewati limit
             else:
-                actual_fill_price = limit_price * (1 - np.random.uniform(0, 0.0002))
+                actual_fill_price = max(limit_price, candle['open']) # Ambil harga open jika gap up melewati limit
             
             return True, actual_fill_price, partial_fill_fraction
         
@@ -769,18 +913,16 @@ class PortfolioBacktester:
         for symbol, trade_details in list(self.active_positions.items()):
             full_data = all_data[symbol]
             
-            check_start = max(start_time, trade_details['entry_time'])
-            if end_time <= check_start:
-                continue
-            
-            # PERBAIKAN: Jangan gunakan .iloc[1:]. Slicing loc sudah inklusif untuk start dan end.
-            # Kita ingin memeriksa SEMUA candle di antara dua timestamp sinyal, dimulai dari
-            # candle SETELAH sinyal dibuat. `check_start` sudah menangani ini.
-            candles_to_check = full_data.loc[check_start:end_time]
+            # --- PERBAIKAN: Sederhanakan logika untuk loop candle-by-candle ---
+            # Kita hanya perlu memeriksa candle saat ini (end_time)
+            try:
+                candles_to_check = full_data.loc[end_time:end_time]
+            except KeyError:
+                continue # Lewati jika timestamp tidak ada di data simbol ini
             if candles_to_check.empty:
                 continue
             
-            previous_candle = full_data.loc[:check_start].iloc[-1] if len(full_data.loc[:check_start]) > 0 else None
+            previous_candle = full_data.loc[:start_time].iloc[-1] if len(full_data.loc[:start_time]) > 0 else None
             exit_reason = None
             
             for idx, candle in candles_to_check.iterrows():
@@ -843,10 +985,10 @@ class PortfolioBacktester:
                 continue
             
             # PERBAIKAN: Gunakan slicing yang sama dengan di atas.
-            # Kita periksa semua candle dari waktu sinyal dibuat hingga sinyal berikutnya.
-            check_start_order = max(start_time, order_details['creation_time'])
-            candles_to_check = full_data.loc[check_start_order:end_time]
-            avg_volume = full_data['volume'].rolling(20).mean().loc[start_time:end_time].mean()
+            # Cukup periksa candle saat ini.
+            candles_to_check = full_data.loc[end_time:end_time]
+            if candles_to_check.empty: continue
+            avg_volume = full_data['volume'].rolling(20).mean().loc[:end_time].iloc[-1]
             
             for fill_time, candle in candles_to_check.iterrows():
                 self.limit_order_stats['attempted'] += 1

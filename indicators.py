@@ -101,13 +101,20 @@ async def fetch_binance_data(exchange, symbol, timeframe, limit, use_cache=True)
         print(f"Error fetching data from Binance for {symbol}: {e}")
         return None
 
-def fetch_binance_data_sync(exchange, symbol, timeframe, limit, use_cache=True):
+def fetch_binance_data_sync(exchange, symbol, timeframe, limit=None, start_date=None, end_date=None, use_cache=True):
     """
     Versi SINKRON dari fetch_binance_data, khusus untuk backtester.
-    Menghilangkan semua kebutuhan asyncio.run() di dalam backtester.
+    Bisa mengambil data berdasarkan limit (jumlah candle terakhir) atau rentang tanggal.
+
+    Args:
+        limit (int, optional): Jumlah candle terakhir yang akan diambil.
+        start_date (str, optional): Tanggal mulai (YYYY-MM-DD).
+        end_date (str, optional): Tanggal akhir (YYYY-MM-DD).
     """
     safe_symbol = symbol.replace('/', '_')
-    cache_file = CACHE_DIR / f"{safe_symbol}_{timeframe}_{limit}.pkl"
+    # PERBAIKAN: Nama cache dinamis berdasarkan mode (limit atau tanggal)
+    date_part = f"_{start_date}_to_{end_date}" if start_date else f"_limit_{limit}"
+    cache_file = CACHE_DIR / f"{safe_symbol}_{timeframe}{date_part}.pkl"
 
     # --- PERBAIKAN: Logika Cache dengan Kedaluwarsa dan Penanganan Error ---
     if use_cache and CACHE_CONFIG.get("enabled", True) and cache_file.exists():
@@ -136,27 +143,43 @@ def fetch_binance_data_sync(exchange, symbol, timeframe, limit, use_cache=True):
         print("Exchange is not initialized. Cannot fetch data.")
         return None
     try:
+        # --- PERBAIKAN: Logika pengambilan data berdasarkan tanggal atau limit ---
         limit_per_call = exchange.limits.get('ohlcv', {}).get('max', 1000)
         timeframe_duration_in_ms = exchange.parse_timeframe(timeframe) * 1000
         all_ohlcv = []
-        since = exchange.milliseconds() - limit * timeframe_duration_in_ms
 
-        while len(all_ohlcv) < limit:
-            # Panggil langsung karena ini adalah fungsi sinkron
-            ohlcv = exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit_per_call)
+        if start_date:
+            # Mode rentang tanggal
+            since = exchange.parse8601(f'{start_date}T00:00:00Z')
+            until = exchange.parse8601(f'{end_date}T23:59:59Z') if end_date else exchange.milliseconds()
+            print(f"Fetching data for {symbol} from {start_date} to {end_date or 'now'}...")
+
+            while since < until:
+                ohlcv = exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit_per_call)
+                if not ohlcv:
+                    break
+                all_ohlcv.extend(ohlcv)
+                since = ohlcv[-1][0] + 1 # Pindah ke candle berikutnya
+        elif limit:
+            # Mode limit (perilaku lama)
+            since = exchange.milliseconds() - limit * timeframe_duration_in_ms
+            print(f"Fetching last {limit} candles for {symbol}...")
+            while len(all_ohlcv) < limit:
+                ohlcv = exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit_per_call)
+                if not ohlcv:
+                    break
+                all_ohlcv.extend(ohlcv)
+                since = ohlcv[-1][0] + 1
+            all_ohlcv = all_ohlcv[-limit:] # Pastikan jumlahnya pas
+        else:
+            raise ValueError("Either 'limit' or 'start_date' must be provided.")
             
-            if not ohlcv:
-                break
-
-            all_ohlcv.extend(ohlcv)
-            since = ohlcv[-1][0] + 1
-
-        all_ohlcv = all_ohlcv[-limit:]
         df = pd.DataFrame(all_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True)
         df.set_index('timestamp', inplace=True)
 
-        if use_cache:
+        # Hanya cache jika data berhasil diambil
+        if use_cache and not df.empty:
             with open(cache_file, 'wb') as f:
                 # Symbol & Data Focus: Tambah noise ke OHLC
                 if 'ATRr_10' in df.columns:
@@ -269,7 +292,7 @@ def calculate_indicators(df):
 
     # --- Kalkulasi indikator kustom dilakukan di luar blok yang dibungkam ---
     # 1. ATR Percentile (for volatility regime detection)
-    atr_col = 'ATRr_10'
+    atr_col = f"ATRr_{CONFIG['atr_period']}" # PERBAIKAN BUG: Gunakan periode ATR dari config
     if atr_col in df.columns:
         df['atr_percentile'] = df[atr_col].rolling(288).rank(pct=True)
         df['atr_percentile'] = df['atr_percentile'].fillna(0.5)
