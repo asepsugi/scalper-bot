@@ -70,7 +70,7 @@ def determine_entry_profile(df_row):
     Mengembalikan dictionary berisi parameter eksekusi yang disesuaikan.
     """
     if not ENTRY_LOGIC.get("enabled", False):
-        return {'profile': 'DISABLED', 'offset_pct': EXECUTION.get("limit_order_offset_pct", 0.0002), 'risk_pct': CONFIG['risk_per_trade'], 'order_type': 'limit'}
+        return {'profile': 'DISABLED', 'offset_pct': 0.0002, 'risk_multiplier': 1.0, 'order_type': 'limit'}
 
     # --- PERBAIKAN: Logika Khusus untuk Strategi Breakout ---
     # Jika sinyal berasal dari AltcoinVolumeBreakoutHunter, paksa penggunaan profil CONTINUATION
@@ -80,8 +80,8 @@ def determine_entry_profile(df_row):
         order_type = 'market' if df_row.get(f"ADX_{CONFIG['atr_period']}", 0) > ENTRY_LOGIC['market_order_adx_threshold'] else 'limit'
         return {
             'profile': 'CONTINUATION (Forced)',
-            'offset_pct': ENTRY_LOGIC['continuation_offset_pct'], # Offset yang sangat kecil
-            'risk_pct': ENTRY_LOGIC['continuation_risk_pct'],
+            'offset_pct': ENTRY_LOGIC['continuation_offset_pct'],
+            'risk_multiplier': ENTRY_LOGIC['continuation_risk_multiplier'],
             'order_type': order_type
         }
 
@@ -110,7 +110,7 @@ def determine_entry_profile(df_row):
         return {
             'profile': 'CONTINUATION',
             'offset_pct': ENTRY_LOGIC['continuation_offset_pct'],
-            'risk_pct': ENTRY_LOGIC['continuation_risk_pct'],
+            'risk_multiplier': ENTRY_LOGIC['continuation_risk_multiplier'],
             'order_type': order_type
         }
 
@@ -142,7 +142,7 @@ def determine_entry_profile(df_row):
         return {
             'profile': 'PULLBACK_BULL',
             'offset_pct': ENTRY_LOGIC['pullback_offset_pct'],
-            'risk_pct': ENTRY_LOGIC['pullback_risk_pct'],
+            'risk_multiplier': ENTRY_LOGIC['pullback_risk_multiplier'],
             'order_type': 'limit'
         }
 
@@ -151,7 +151,7 @@ def determine_entry_profile(df_row):
         return {
             'profile': 'PULLBACK_BEAR',
             'offset_pct': ENTRY_LOGIC['pullback_offset_pct'],
-            'risk_pct': ENTRY_LOGIC['pullback_risk_pct'],
+            'risk_multiplier': ENTRY_LOGIC['pullback_risk_multiplier'],
             'order_type': 'limit'
         }
 
@@ -161,7 +161,7 @@ def determine_entry_profile(df_row):
     return {
         'profile': 'DEFAULT', 
         'offset_pct': ENTRY_LOGIC['default_offset_pct'], # Gunakan offset dari config
-        'risk_pct': CONFIG['risk_per_trade'], 
+        'risk_multiplier': 1.0, # Gunakan 100% dari risiko dasar strategi
         'order_type': 'limit' # Defaultnya adalah limit order yang sabar
     }
 
@@ -624,6 +624,138 @@ def signal_version_AltcoinVolumeBreakoutHunter(df, symbol: str = None):
 
     return long_signal, short_signal, exit_params
 
+def signal_version_MemecoinMoonshotHunter(df, symbol: str = None):
+    """
+    STRATEGI 1: Long-Only Memecoin Moonshot Hunter
+    - Tujuan: Menangkap pump eksplosif pada memecoin dan low-cap.
+    - Logic: Volume spike masif + RSI sangat overbought + breakout harga.
+    """
+    params = CONFIG.get("strategy_params", {}).get("MemecoinMoonshotHunter", {})
+
+    # --- Whitelist Filter ---
+    if symbol and symbol not in params.get("symbol_whitelist", []):
+        return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+
+    # --- Indikator & Kolom ---
+    vol_ma_col = f"VOL_{CONFIG['volume_lookback']}"
+    rsi_col = f"RSI_{CONFIG['rsi_period']}"
+    atr_col = f"ATRr_{CONFIG['atr_period']}"
+    required_cols = [vol_ma_col, rsi_col, atr_col, 'high', 'low', 'close']
+
+    if any(col not in df.columns for col in required_cols):
+        return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+
+    # --- Parameter ---
+    vol_spike_mult = params.get("volume_spike_multiplier", 10.5)
+    rsi_thresh = params.get("rsi_threshold", 82)
+    breakout_window = params.get("breakout_window", 20)
+    anti_chase_pct = params.get("anti_chase_pct_limit", 0.18)
+    anti_chase_window = params.get("anti_chase_window", 8)
+
+    # --- Trigger Conditions ---
+    # 1. Volume Spike (8-15x MA20)
+    volume_spike = df['volume'] > (df[vol_ma_col] * vol_spike_mult)
+
+    # 2. RSI Overbought (RSI > 82)
+    rsi_hot = df[rsi_col] > rsi_thresh
+
+    # 3. Price Breakout (new 20-candle high)
+    recent_high = df['high'].shift(1).rolling(window=breakout_window).max()
+    price_breakout = df['close'] > recent_high
+
+    # --- Filters ---
+    # 1. Anti-Chase Filter (max 18% move in last 8 candles)
+    price_change_recent = df['close'].pct_change(periods=anti_chase_window)
+    not_chasing = price_change_recent < anti_chase_pct
+
+    # --- Gabungkan Sinyal (HANYA LONG) ---
+    long_signal = volume_spike & rsi_hot & price_breakout & not_chasing
+    short_signal = pd.Series(False, index=df.index) # Strategi ini long-only
+
+    # --- Exit Parameters ---
+    exit_params = {
+        'sl_multiplier': params.get("sl_multiplier", 2.4),
+        'rr_ratio': 20.0, # Target utama jauh, trailing akan mengambil alih
+        'trailing': {
+            "enabled": True,
+            "trigger_rr": params.get("trailing_trigger_rr", 3.0),
+            "distance_atr": params.get("trailing_distance_atr", 3.5),
+        }
+    }
+
+    return long_signal, short_signal, exit_params
+
+def signal_version_LiquiditySweepReversal(df, symbol: str = None):
+    """
+    STRATEGI 2: Liquidity Sweep Reversal (Long & Short)
+    - Tujuan: Menangkap reversal setelah perburuan likuiditas (dump/pump keras).
+    - Logic: Sentuh BB band + volume spike + divergence RSI + candle reversal.
+    """
+    params = CONFIG.get("strategy_params", {}).get("LiquiditySweepReversal", {})
+
+    # --- Indikator & Kolom ---
+    vol_ma_col = f"VOL_{CONFIG['volume_lookback']}"
+    rsi_col = f"RSI_{CONFIG['rsi_period']}"
+    atr_col = f"ATRr_{CONFIG['atr_period']}"
+    bb_lower_col = 'BBL_20_2.0'
+    bb_upper_col = 'BBU_20_2.0'
+    required_cols = [vol_ma_col, rsi_col, atr_col, bb_lower_col, bb_upper_col, 'high', 'low', 'close', 'open']
+
+    if any(col not in df.columns for col in required_cols):
+        return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+
+    # --- Parameter ---
+    vol_spike_mult = params.get("volume_spike_multiplier", 3.8)
+    div_window = params.get("rsi_divergence_window", 12)
+    body_min_ratio = params.get("candle_body_min_ratio", 0.1)
+    wick_max_ratio = params.get("candle_wick_max_ratio", 0.7)
+
+    # --- Trigger Conditions ---
+    # 1. Volume Spike
+    volume_spike = df['volume'] > (df[vol_ma_col] * vol_spike_mult)
+
+    # 2. Price touches Bollinger Bands
+    touch_lower_bb = df['low'] <= df[bb_lower_col]
+    touch_upper_bb = df['high'] >= df[bb_upper_col]
+
+    # 3. RSI Divergence
+    # Bullish Divergence: Lower low in price, but higher low in RSI
+    price_ll = df['low'] < df['low'].rolling(div_window).min().shift(1)
+    rsi_hl = df[rsi_col] > df[rsi_col].rolling(div_window).min().shift(1)
+    bullish_divergence = price_ll & rsi_hl
+
+    # Bearish Divergence: Higher high in price, but lower high in RSI
+    price_hh = df['high'] > df['high'].rolling(div_window).max().shift(1)
+    rsi_lh = df[rsi_col] < df[rsi_col].rolling(div_window).max().shift(1)
+    bearish_divergence = price_hh & rsi_lh
+
+    # 4. Reversal Candle Shape (Hammer / Shooting Star)
+    candle_range = (df['high'] - df['low']).replace(0, np.nan)
+    candle_body = abs(df['close'] - df['open'])
+    upper_wick = df['high'] - df[['open', 'close']].max(axis=1)
+    lower_wick = df[['open', 'close']].min(axis=1) - df['low']
+
+    is_hammer = (lower_wick / candle_range > wick_max_ratio) & (candle_body / candle_range > body_min_ratio) & (df['close'] > df['open'])
+    is_shooting_star = (upper_wick / candle_range > wick_max_ratio) & (candle_body / candle_range > body_min_ratio) & (df['close'] < df['open'])
+
+    # --- Gabungkan Sinyal ---
+    long_signal = touch_lower_bb & volume_spike & bullish_divergence & is_hammer
+    short_signal = touch_upper_bb & volume_spike & bearish_divergence & is_shooting_star
+
+    # --- Exit Parameters ---
+    exit_params = {
+        'sl_multiplier': params.get("sl_multiplier", 2.2),
+        'rr_ratio': 15.0, # Target jauh, partial TP akan dieksekusi lebih dulu
+        'partial_tps': params.get("partial_tps", []),
+        'trailing': {
+            "enabled": True,
+            "trigger_rr": params.get("trailing_trigger_rr", 2.5),
+            "distance_atr": 3.0, # Jarak trailing standar
+        }
+    }
+
+    return long_signal, short_signal, exit_params
+
 # =============================================================================
 # STRATEGY CONFIGURATION - OPTIMIZED WEIGHTS
 # =============================================================================
@@ -641,7 +773,15 @@ STRATEGY_CONFIG = {
     # },
     "AltcoinVolumeBreakoutHunter": {
         "function": signal_version_AltcoinVolumeBreakoutHunter,
-        "weight": 0.35 # Bobot lebih rendah karena sangat spesifik
+        "weight": 0.40 # Bobot utama untuk momentum
+    },
+    "MemecoinMoonshotHunter": {
+        "function": signal_version_MemecoinMoonshotHunter,
+        "weight": 0.30 # Bobot lebih rendah, high-risk high-reward
+    },
+    "LiquiditySweepReversal": {
+        "function": signal_version_LiquiditySweepReversal,
+        "weight": 0.30 # Bobot komplementer untuk mean-reversion
     }
     # ,
     # "HybridScalper": {

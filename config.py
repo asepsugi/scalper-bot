@@ -15,9 +15,6 @@ CONFIG = {
     "timeframe_trend": "15m",
     "timeframe_signal": "5m",
 
-    # CRITICAL FIX: Your risk was too high for a scalper
-    "risk_per_trade": 0.005,  # UP from 0.005 (0.7% instead of 0.5%)
-    
     "fib_levels": [1.618, 1.88, 2.618],
     "buffer_pips": 0.0001,
     
@@ -52,6 +49,7 @@ CONFIG = {
     # =========================================================================
     "strategy_params": {
         "A3": {
+            "risk_per_trade": 0.01, # Risiko 1% untuk strategi ini
             # PERBAIKAN: Beri ruang lebih untuk SL agar tidak kena noise
             "sl_base_multiplier": 2.2,
             "sl_atr_pct_scaler": 0.3,
@@ -66,6 +64,7 @@ CONFIG = {
             "debug_mode": False  # Log kenapa sinyal None (e.g., "Skipped: ADX=17 < 18")
         },
         "B1": {
+            "risk_per_trade": 0.008, # Risiko 0.8% untuk strategi ini
             "adx_trending_threshold": 15, # PERBAIKAN: Longgarkan dan selaraskan
             "adx_ranging_threshold": 22, # Aktifkan kembali untuk ranging mode
             "atr_delta_volatile_threshold": 1.5,
@@ -85,6 +84,7 @@ CONFIG = {
             "debug_mode": False  # Log kenapa sinyal None
         },
         "AltcoinVolumeBreakoutHunter": {
+            "risk_per_trade": 0.012, # Risiko 1.2% untuk strategi breakout yang lebih agresif
             # --- REKOMENDASI OPTIMASI ---
             "breakout_window": 15,
             "volume_spike_multiplier": 4.2,
@@ -100,6 +100,31 @@ CONFIG = {
             "regime_adx_threshold": 19,
             "regime_atr_pct_threshold": 0.0085 # 0.85%
         },
+        "MemecoinMoonshotHunter": {
+            "risk_per_trade": 0.015, # Risiko lebih tinggi untuk potensi moonshot
+            "volume_spike_multiplier": 10.5, # 8-15x, kita ambil tengah-atas
+            "rsi_threshold": 82,
+            "breakout_window": 20,
+            "anti_chase_pct_limit": 0.18, # Maksimal naik 18%
+            "anti_chase_window": 8,
+            "sl_multiplier": 2.4,
+            "trailing_trigger_rr": 3.0,
+            "trailing_distance_atr": 3.5,
+            "symbol_whitelist": ["PEPEUSDT", "WIFUSDT", "BONKUSDT", "FLOKIUSDT", "MEMEUSDT", "ORDIUSDT", "SATSUSDT"] # Fokus pada memecoin
+        },
+        "LiquiditySweepReversal": {
+            "risk_per_trade": 0.009, # Risiko standar
+            "volume_spike_multiplier": 3.8, # > 3.5x
+            "sl_multiplier": 2.2,
+            "rsi_divergence_window": 12, # Periode untuk mencari divergence
+            "candle_body_min_ratio": 0.1, # Badan candle minimal 10% dari range
+            "candle_wick_max_ratio": 0.7, # Sumbu bawah/atas maksimal 70% dari range (untuk hammer/shooting star)
+            "partial_tps": [
+                (4.0, 0.50), # Jual 50% di 4R
+                (8.0, 0.30)  # Jual 30% di 8R
+            ],
+            "trailing_trigger_rr": 2.5 # Mulai trailing setelah TP pertama
+        }
     },
 
     # NEW: Essential filters for scalping profitability
@@ -132,14 +157,13 @@ ENTRY_LOGIC = {
     "pullback_bb_retrace_pct": 0.002, # PERBAIKAN: Harga cukup retrace 0.2% dari band luar, membuatnya lebih sensitif
 
     # --- Parameter Eksekusi ---
-    # PERBAIKAN: Buat continuation lebih agresif, hampir mendekati market order.
-    "continuation_offset_pct": -0.0001, # -0.01% (menunggu pullback sangat tipis, hampir instan)
-    "pullback_offset_pct": -0.0015,     # -0.15% (menunggu pullback yang lebih dalam)
-    "default_offset_pct": 0.0,          # PERBAIKAN KRUSIAL: Set ke 0. Tempatkan limit order tepat di harga sinyal, tidak menunggu pullback.
+    "continuation_offset_pct": 0.0001, # Offset positif kecil untuk mengejar harga
+    "pullback_offset_pct": -0.0015,    # Offset negatif untuk menunggu pullback
+    "default_offset_pct": 0.0,         # Tempatkan limit order tepat di harga sinyal
 
     # --- Parameter Risiko Dinamis ---
-    "continuation_risk_pct": CONFIG["risk_per_trade"] * 0.75, # Risiko 75% dari standar untuk entry agresif
-    "pullback_risk_pct": CONFIG["risk_per_trade"] * 1.25,     # Risiko 125% dari standar untuk entry pullback berkualitas tinggi
+    "continuation_risk_multiplier": 0.75, # Gunakan 75% dari risiko dasar strategi
+    "pullback_risk_multiplier": 1.25,     # Gunakan 125% dari risiko dasar strategi
 
     "market_order_adx_threshold": 28 # PERBAIKAN: Hanya gunakan market order jika tren SANGAT kuat (ADX > 28)
 }

@@ -37,6 +37,7 @@ class PortfolioBacktester:
         self.weekly_killswitch_pause_until = None
         self.last_weekly_check_day = None
         self.weekly_killswitch_triggers = 0
+        self.weekly_whitelists = {} # PILAR 2: Simpan data whitelist untuk logging
         # ---------------------------------------------------------
         self.simulate_latency = simulate_latency # Kontrol untuk jeda buatan
         self.exchange = None # Akan diinisialisasi oleh skrip pemanggil
@@ -47,6 +48,10 @@ class PortfolioBacktester:
             'expired': 0,
             'fill_rate': 0.0
         }
+
+    def set_weekly_whitelists(self, whitelists: dict):
+        """Menerima dan menyimpan data whitelist mingguan dari skrip pemanggil."""
+        self.weekly_whitelists = whitelists
 
     def rank_symbols_by_historical_volume(self, symbols: list, start_date_str: str, top_n: int) -> list:
         """
@@ -168,14 +173,14 @@ class PortfolioBacktester:
         current_risk_per_trade = risk_params['risk_per_trade']
         if LIVE_TRADING_CONFIG.get('scale_down_on_loss_streak', False):
             loss_streak = 0
-            for trade in reversed(self.trades):
-                if trade['PnL (USD)'] < 0:
-                    loss_streak += 1
-                else: break
+            # for trade in reversed(self.trades):
+            #     if trade['PnL (USD)'] < 0:
+            #         loss_streak += 1
+            #     else: break
             if loss_streak >= 2: current_risk_per_trade = 0.002
         default_leverage = risk_params['default_leverage']
 
-        self.create_pending_order(signal_row_dict, signal_time, full_data, exit_params, symbol, current_risk_per_trade, default_leverage)
+        self.create_pending_order(signal_row_dict, signal_time, full_data, exit_params, symbol, current_risk_per_trade, default_leverage, strategy_name)
 
     def open_trade(self, symbol, order_details, fill_time):
         if symbol in self.active_positions: return
@@ -347,7 +352,7 @@ class PortfolioBacktester:
             return False # Stop trading immediately
         return True
 
-    def create_pending_order(self, signal_row, signal_time, full_data, exit_params, symbol, current_risk_per_trade, default_leverage):
+    def create_pending_order(self, signal_row, signal_time, full_data, exit_params, symbol, current_risk_per_trade, default_leverage, strategy_name):
         if symbol in self.pending_orders: return
 
         if signal_time >= full_data.index[-1]:
@@ -372,9 +377,14 @@ class PortfolioBacktester:
         
         # Ambil parameter dari profil yang terdeteksi
         limit_offset_pct = entry_profile['offset_pct']
-        risk_for_this_trade = entry_profile['risk_pct']
+        risk_multiplier = entry_profile['risk_multiplier']
         entry_order_type = entry_profile['order_type']
         
+        # --- PERBAIKAN: Ambil risiko dasar dari strategi, lalu terapkan pengali ---
+        strategy_params = CONFIG.get("strategy_params", {}).get(strategy_name, {})
+        base_risk_per_trade = strategy_params.get("risk_per_trade", 0.01) # Fallback ke 1%
+        final_risk_for_this_trade = base_risk_per_trade * risk_multiplier
+
         limit_price = signal_price * (1 - limit_offset_pct) if direction == 'LONG' else signal_price * (1 + limit_offset_pct)
         expiration_candles = EXECUTION.get("limit_order_expiration_candles", 5)
 
@@ -389,7 +399,7 @@ class PortfolioBacktester:
             rr_ratio = rr_ratio.iloc[full_data.index.get_loc(signal_time)]
 
         # Gunakan risiko yang sudah disesuaikan
-        risk_amount_usd = self.balance * risk_for_this_trade
+        risk_amount_usd = self.balance * final_risk_for_this_trade
         stop_loss_dist = atr_val * sl_multiplier
         
         if limit_price <= 0: return
@@ -658,10 +668,6 @@ class PortfolioBacktester:
             
             strategy_rows += f"| `{name}` | {config['weight']} | {pnl_str} | {trades_str} | {win_rate_str} |\n"
         
-        # Perbaikan format Net Profit untuk nilai negatif
-        profit_color = "green" if kwargs['net_profit'] >= 0 else "red"
-        profit_sign = "+" if kwargs['net_profit'] >= 0 else ""
-        
         # Format win rate Long/Short
         long_wr_str = f"{kwargs.get('total_long', 0)} trades ({kwargs.get('long_win_rate', 0):.2f}%)"
         short_wr_str = f"{kwargs.get('total_short', 0)} trades ({kwargs.get('short_win_rate', 0):.2f}%)"
@@ -671,7 +677,7 @@ class PortfolioBacktester:
             f"| ----------------- | -------------------------- |\n"
             f"| Saldo Awal        | ${self.initial_balance:,.2f}                     |\n"
             f"| Saldo Akhir       | ${self.balance:,.2f}                     |\n"
-            f"| **Net Profit**    | **<span style='color:{profit_color};'>${kwargs['net_profit']:,.2f} ({profit_sign}{kwargs['net_profit_pct']:.2f}%)</span>** |\n"
+            f"| **Net Profit**    | **${kwargs['net_profit']:,.2f} ({kwargs['net_profit_pct']:+.2f}%)** |\n"
             f"| Total Trades      | {kwargs['total_trades']}                         |\n"
             f"| Win Rate          | {kwargs['win_rate']:.2f}%                     |\n"
             f"|  - Long Win Rate  | {long_wr_str}              |\n"
@@ -683,10 +689,29 @@ class PortfolioBacktester:
         )
 
         # Format filter config yang aktif
-        active_filters = [f"`{key}`" for key, value in CONFIG.get("signal_filters", {}).items() if value]
-        active_filters_str = ", ".join(active_filters) if active_filters else "Tidak ada"
+        # PERBAIKAN: Tampilkan parameter dari strategi yang aktif, bukan hanya filter global
+        active_filters_str = ""
+        for strategy_name, config in STRATEGY_CONFIG.items():
+            params = CONFIG.get("strategy_params", {}).get(strategy_name, {})
+            if params:
+                active_filters_str += f"- **`{strategy_name}`:** "
+                # Ambil 5 parameter pertama untuk keringkasan
+                # --- PERBAIKAN: Tambahkan risk_per_trade secara eksplisit ---
+                param_items = [('risk_per_trade', params.get('risk_per_trade', 'N/A'))] + list(params.items())[:4]
+                active_filters_str += ", ".join([f"`{k}={v}`" for k, v in param_items]) + "\n"
         start_date_str = kwargs.get('start_date').strftime('%Y-%m-%d') if kwargs.get('start_date') else "N/A"
         end_date_str = kwargs.get('end_date').strftime('%Y-%m-%d') if kwargs.get('end_date') else "N/A"
+
+        # --- FITUR BARU: Format hasil rotasi whitelist mingguan ---
+        whitelist_log_str = ""
+        if self.weekly_whitelists:
+            whitelist_log_str += "\n**Contoh Rotasi Whitelist Mingguan:**\n\n"
+            # Batasi hingga 5 minggu pertama untuk keringkasan log
+            for i, (week_num, symbols) in enumerate(list(self.weekly_whitelists.items())[:5]):
+                symbols_str = ", ".join(list(symbols)[:5]) + ('...' if len(symbols) > 5 else '')
+                whitelist_log_str += f"- **Minggu {week_num}:** `{symbols_str}`\n"
+            if len(self.weekly_whitelists) > 5:
+                whitelist_log_str += "- ... (dan seterusnya)\n"
 
         log_entry = (
             f"\n---\n\n"
@@ -696,7 +721,7 @@ class PortfolioBacktester:
             f"-   **Candles:** {args.limit}\n"
             f"-   **Periode:** {start_date_str} s/d {end_date_str} (~{kwargs['duration_str']})\n"
             f"-   **Mode Exit:** {kwargs.get('exit_logic_mode', 'N/A')}\n\n"
-            f"**Filter Aktif:** {active_filters_str}\n\n"
+            f"**Parameter Filter Aktif:**\n{active_filters_str}{whitelist_log_str}\n"
             f"**Konfigurasi & Performa Strategi:**\n\n"
             f"{strategy_table_header}"
             f"{strategy_table_divider}"

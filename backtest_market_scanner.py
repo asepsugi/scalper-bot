@@ -88,6 +88,7 @@ async def run_scan(backtester, symbols, limit, start_date, end_date):
             
             sorted_scores = sorted(scores, key=lambda x: x['score'], reverse=True)
             weekly_whitelists[week_start_date.week] = {item['symbol'] for item in sorted_scores[:WHITELIST_ROTATION_CONFIG.get("top_n_coins", 20)]}
+        backtester.set_weekly_whitelists(weekly_whitelists) # Kirim data whitelist ke backtester untuk logging
 
     console.log("\nGenerating signals from prepared data...")
     for symbol, base_data in all_data.items():
