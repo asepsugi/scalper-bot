@@ -102,10 +102,10 @@ CONFIG = {
         },
         "MemecoinMoonshotHunter": {
             "risk_per_trade": 0.015, # Risiko lebih tinggi untuk potensi moonshot
-            "volume_spike_multiplier": 10.5, # 8-15x, kita ambil tengah-atas
-            "rsi_threshold": 82,
-            "breakout_window": 20,
-            "anti_chase_pct_limit": 0.18, # Maksimal naik 18%
+            "volume_spike_multiplier": 5, # 4.5-5.5x, kita ambil tengah-atas
+            "rsi_threshold": 75,
+            "breakout_window": 14,
+            "anti_chase_pct_limit": 0.25, # Maksimal naik 18%
             "anti_chase_window": 8,
             "sl_multiplier": 2.4,
             "trailing_trigger_rr": 3.0,
@@ -114,11 +114,16 @@ CONFIG = {
         },
         "LiquiditySweepReversal": {
             "risk_per_trade": 0.009, # Risiko standar
-            "volume_spike_multiplier": 3.8, # > 3.5x
+            # --- PERBAIKAN BERDASARKAN ANALISIS ---
+            "volume_spike_multiplier": 3.0, # Dilonggarkan dari 3.8x ke 3.0x
             "sl_multiplier": 2.2,
-            "rsi_divergence_window": 12, # Periode untuk mencari divergence
-            "candle_body_min_ratio": 0.1, # Badan candle minimal 10% dari range
-            "candle_wick_max_ratio": 0.7, # Sumbu bawah/atas maksimal 70% dari range (untuk hammer/shooting star)
+            "rsi_divergence_window": 5, # Dipersempit dari 12 ke 5 untuk menangkap micro-divergence
+            "candle_body_max_ratio": 0.4, # Badan candle maksimal 40% dari range (melonggarkan dari 30%)
+            "candle_wick_min_ratio": 0.6, # Sumbu bawah/atas minimal 60% dari range
+            "bb_period": 20, # Periode Bollinger Bands
+            "bb_std_dev": 1.8, # Dibuat lebih sensitif (dari 2.0 ke 1.8)
+            "rsi_divergence_tolerance": 0.05, # Toleransi 5% untuk RSI low
+            # ------------------------------------
             "partial_tps": [
                 (4.0, 0.50), # Jual 50% di 4R
                 (8.0, 0.30)  # Jual 30% di 8R

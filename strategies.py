@@ -697,50 +697,61 @@ def signal_version_LiquiditySweepReversal(df, symbol: str = None):
     vol_ma_col = f"VOL_{CONFIG['volume_lookback']}"
     rsi_col = f"RSI_{CONFIG['rsi_period']}"
     atr_col = f"ATRr_{CONFIG['atr_period']}"
-    bb_lower_col = 'BBL_20_2.0'
-    bb_upper_col = 'BBU_20_2.0'
+    
+    # --- PERBAIKAN: Gunakan parameter BB dinamis dari config ---
+    bb_period = params.get("bb_period", 20)
+    bb_std = params.get("bb_std_dev", 1.8)
+    bb_lower_col = f'BBL_{bb_period}_{bb_std}'
+    bb_upper_col = f'BBU_{bb_period}_{bb_std}'
+    
+    # Hitung BB kustom jika belum ada di DataFrame
+    if bb_lower_col not in df.columns:
+        df.ta.bbands(length=bb_period, std=bb_std, append=True)
+
     required_cols = [vol_ma_col, rsi_col, atr_col, bb_lower_col, bb_upper_col, 'high', 'low', 'close', 'open']
 
     if any(col not in df.columns for col in required_cols):
         return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
 
     # --- Parameter ---
-    vol_spike_mult = params.get("volume_spike_multiplier", 3.8)
-    div_window = params.get("rsi_divergence_window", 12)
-    body_min_ratio = params.get("candle_body_min_ratio", 0.1)
-    wick_max_ratio = params.get("candle_wick_max_ratio", 0.7)
+    vol_spike_mult = params.get("volume_spike_multiplier", 3.0)
+    div_window = params.get("rsi_divergence_window", 5) # Dipersempit sesuai rekomendasi
+    body_max_ratio = params.get("candle_body_max_ratio", 0.4) # Dilonggarkan
+    wick_min_ratio = params.get("candle_wick_min_ratio", 0.6)
+    rsi_tolerance = params.get("rsi_divergence_tolerance", 0.05)
 
     # --- Trigger Conditions ---
     # 1. Volume Spike
     volume_spike = df['volume'] > (df[vol_ma_col] * vol_spike_mult)
 
     # 2. Price touches Bollinger Bands
-    touch_lower_bb = df['low'] <= df[bb_lower_col]
+    touch_lower_bb = df['low'] <= df[bb_lower_col] # Harga menyentuh atau menembus band
     touch_upper_bb = df['high'] >= df[bb_upper_col]
 
-    # 3. RSI Divergence
-    # Bullish Divergence: Lower low in price, but higher low in RSI
-    price_ll = df['low'] < df['low'].rolling(div_window).min().shift(1)
-    rsi_hl = df[rsi_col] > df[rsi_col].rolling(div_window).min().shift(1)
+    # 3. RSI Divergence (dengan logika shift(3) yang disimulasikan via window pendek)
+    # Bullish Divergence: Harga membuat lower low, tapi RSI membuat higher low (dengan toleransi)
+    price_ll = df['low'] < df['low'].rolling(div_window).min().shift(1) # shift(1) untuk membandingkan dengan window sebelumnya
+    rsi_hl = df[rsi_col] > (df[rsi_col].rolling(div_window).min().shift(1) * (1 - rsi_tolerance))
     bullish_divergence = price_ll & rsi_hl
 
-    # Bearish Divergence: Higher high in price, but lower high in RSI
+    # Bearish Divergence: Harga membuat higher high, tapi RSI membuat lower high (dengan toleransi)
     price_hh = df['high'] > df['high'].rolling(div_window).max().shift(1)
-    rsi_lh = df[rsi_col] < df[rsi_col].rolling(div_window).max().shift(1)
+    rsi_lh = df[rsi_col] < (df[rsi_col].rolling(div_window).max().shift(1) * (1 + rsi_tolerance))
     bearish_divergence = price_hh & rsi_lh
 
-    # 4. Reversal Candle Shape (Hammer / Shooting Star)
+    # 4. Reversal Candle Shape (Hammer / Shooting Star) - Logika dilonggarkan
     candle_range = (df['high'] - df['low']).replace(0, np.nan)
     candle_body = abs(df['close'] - df['open'])
     upper_wick = df['high'] - df[['open', 'close']].max(axis=1)
     lower_wick = df[['open', 'close']].min(axis=1) - df['low']
 
-    is_hammer = (lower_wick / candle_range > wick_max_ratio) & (candle_body / candle_range > body_min_ratio) & (df['close'] > df['open'])
-    is_shooting_star = (upper_wick / candle_range > wick_max_ratio) & (candle_body / candle_range > body_min_ratio) & (df['close'] < df['open'])
+    # PERBAIKAN: Tidak lagi mensyaratkan candle harus hijau/merah, fokus pada bentuk penolakan.
+    is_hammer_shape = (lower_wick / candle_range > wick_min_ratio) & (candle_body / candle_range < body_max_ratio)
+    is_shooting_star_shape = (upper_wick / candle_range > wick_min_ratio) & (candle_body / candle_range < body_max_ratio)
 
     # --- Gabungkan Sinyal ---
-    long_signal = touch_lower_bb & volume_spike & bullish_divergence & is_hammer
-    short_signal = touch_upper_bb & volume_spike & bearish_divergence & is_shooting_star
+    long_signal = touch_lower_bb & volume_spike & bullish_divergence & is_hammer_shape
+    short_signal = touch_upper_bb & volume_spike & bearish_divergence & is_shooting_star_shape
 
     # --- Exit Parameters ---
     exit_params = {
