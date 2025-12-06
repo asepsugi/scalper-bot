@@ -103,10 +103,10 @@ CONFIG = {
         "MemecoinMoonshotHunter": {
             "risk_per_trade": 0.015, # Risiko lebih tinggi untuk potensi moonshot
             "volume_spike_multiplier": 5, # 4.5-5.5x, kita ambil tengah-atas
-            "rsi_threshold": 75,
+            "rsi_threshold": 70,
             "breakout_window": 14,
             "anti_chase_pct_limit": 0.25, # Maksimal naik 18%
-            "anti_chase_window": 8,
+            "anti_chase_window": 10,
             "sl_multiplier": 2.4,
             "trailing_trigger_rr": 3.0,
             "trailing_distance_atr": 3.5,
@@ -115,14 +115,14 @@ CONFIG = {
         "LiquiditySweepReversal": {
             "risk_per_trade": 0.009, # Risiko standar
             # --- PERBAIKAN BERDASARKAN ANALISIS ---
-            "volume_spike_multiplier": 3.0, # Dilonggarkan dari 3.8x ke 3.0x
+            "volume_spike_multiplier": 2.5, # Dilonggarkan dari 3.0x ke 2.5x
             "sl_multiplier": 2.2,
-            "rsi_divergence_window": 5, # Dipersempit dari 12 ke 5 untuk menangkap micro-divergence
+            "rsi_divergence_window": 8, # Dipersempit dari 12 ke 5 untuk menangkap micro-divergence
+            "rsi_divergence_tolerance": 0.08, # Toleransi 5% untuk RSI low
             "candle_body_max_ratio": 0.4, # Badan candle maksimal 40% dari range (melonggarkan dari 30%)
             "candle_wick_min_ratio": 0.6, # Sumbu bawah/atas minimal 60% dari range
             "bb_period": 20, # Periode Bollinger Bands
-            "bb_std_dev": 1.8, # Dibuat lebih sensitif (dari 2.0 ke 1.8)
-            "rsi_divergence_tolerance": 0.05, # Toleransi 5% untuk RSI low
+            "bb_std_dev": 2.0, # Dibuat lebih sensitif (dari 2.0 ke 1.8)
             # ------------------------------------
             "partial_tps": [
                 (4.0, 0.50), # Jual 50% di 4R

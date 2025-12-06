@@ -646,7 +646,7 @@ def signal_version_MemecoinMoonshotHunter(df, symbol: str = None):
         return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
 
     # --- Parameter ---
-    vol_spike_mult = params.get("volume_spike_multiplier", 10.5)
+    vol_spike_mult = params.get("volume_spike_multiplier", 6.5)
     rsi_thresh = params.get("rsi_threshold", 82)
     breakout_window = params.get("breakout_window", 20)
     anti_chase_pct = params.get("anti_chase_pct_limit", 0.18)
@@ -756,11 +756,11 @@ def signal_version_LiquiditySweepReversal(df, symbol: str = None):
     # --- Exit Parameters ---
     exit_params = {
         'sl_multiplier': params.get("sl_multiplier", 2.2),
-        'rr_ratio': 15.0, # Target jauh, partial TP akan dieksekusi lebih dulu
-        'partial_tps': params.get("partial_tps", []),
+        'rr_ratio': 15.0, # Target utama jauh, partial TP akan dieksekusi lebih dulu
+        'partial_tps': params.get("partial_tps", []), # PERBAIKAN: Gunakan partial_tps dari config
         'trailing': {
             "enabled": True,
-            "trigger_rr": params.get("trailing_trigger_rr", 2.5),
+            "trigger_rr": params.get("trailing_trigger_rr", 2.5), # PERBAIKAN: Gunakan trigger_rr dari config
             "distance_atr": 3.0, # Jarak trailing standar
         }
     }

@@ -24,16 +24,26 @@ async def run_scan(backtester, symbols, limit, start_date, end_date):
     # --- PERBAIKAN: Pengambilan data konkuren ---
     console.log(f"Starting concurrent data fetching for {len(symbols)} symbols...")
     
-    # Buat loop event untuk menjalankan tugas-tugas async di dalam fungsi sync
     loop = asyncio.get_event_loop()
     
-    # Buat daftar tugas, bungkus panggilan sinkron dalam executor
-    tasks = [loop.run_in_executor(None, backtester.fetch_and_prepare_symbol_data, symbol, limit, start_date, end_date) for symbol in symbols]
-    
-    results = await asyncio.gather(*tasks)
+    # --- PERBAIKAN KRUSIAL: Proses data dalam batch untuk menghindari API ban ---
+    batch_size = 5  # Proses 5 simbol sekaligus, ini jauh lebih aman dari 50.
+    all_results = []
+    for i in range(0, len(symbols), batch_size):
+        batch_symbols = symbols[i:i + batch_size]
+        console.log(f"\n[bold]Processing batch {i//batch_size + 1}/{(len(symbols) + batch_size - 1)//batch_size} (Symbols: {', '.join(batch_symbols)})[/bold]")
+        
+        tasks = [loop.run_in_executor(None, backtester.fetch_and_prepare_symbol_data, symbol, limit, start_date, end_date) for symbol in batch_symbols]
+        
+        batch_results = await asyncio.gather(*tasks)
+        all_results.extend(batch_results)
+        
+        # Jeda singkat antar batch untuk lebih menghormati rate limit
+        console.log("[grey50]Pausing for 2 seconds between batches...[/grey50]")
+        await asyncio.sleep(2)
 
-    for i, (result_df, from_cache) in enumerate(results):
-        symbol = symbols[i]
+    # Proses hasil yang sudah dikumpulkan
+    for symbol, (result_df, from_cache) in zip(symbols, all_results):
         if result_df is not None and not result_df.empty:
             all_data[symbol] = result_df
             console.log(f"({i+1}/{len(symbols)}) Successfully processed [bold cyan]{symbol}[/bold cyan] (from cache: {from_cache})")
