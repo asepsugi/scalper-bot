@@ -685,11 +685,11 @@ def signal_version_MemecoinMoonshotHunter(df, symbol: str = None):
 
     return long_signal, short_signal, exit_params
 
-def signal_version_LiquiditySweepReversal(df, symbol: str = None):
+def signal_version_LongOnlyCorrectionHunter(df, symbol: str = None):
     """
-    STRATEGI 2: Liquidity Sweep Reversal (Long & Short)
-    - Tujuan: Menangkap reversal setelah perburuan likuiditas (dump/pump keras).
-    - Logic: Sentuh BB band + volume spike + divergence RSI + candle reversal.
+    STRATEGI 2: Long-Only Correction Hunter
+    - Tujuan: Menangkap pantulan teknikal (technical bounce) setelah terjadi dump yang signifikan.
+    - Logic: Beli saat harga oversold ekstrem di dekat lower BB, dengan konfirmasi volume dan candle bullish.
     """
     params = CONFIG.get("strategy_params", {}).get("LiquiditySweepReversal", {})
 
@@ -713,45 +713,39 @@ def signal_version_LiquiditySweepReversal(df, symbol: str = None):
     if any(col not in df.columns for col in required_cols):
         return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
 
-    # --- Parameter ---
-    vol_spike_mult = params.get("volume_spike_multiplier", 3.0)
-    div_window = params.get("rsi_divergence_window", 5) # Dipersempit sesuai rekomendasi
-    body_max_ratio = params.get("candle_body_max_ratio", 0.4) # Dilonggarkan
-    wick_min_ratio = params.get("candle_wick_min_ratio", 0.6)
-    rsi_tolerance = params.get("rsi_divergence_tolerance", 0.05)
+    # --- LOGIKA BARU: Long-Only Correction Hunter ---
+    # Tujuan: Menangkap pantulan teknikal setelah terjadi dump yang signifikan.
 
-    # --- Trigger Conditions ---
-    # 1. Volume Spike
-    volume_spike = df['volume'] > (df[vol_ma_col] * vol_spike_mult)
+    # 1. Harga menyentuh atau menembus Lower Bollinger Band.
+    price_at_lower_band = df['low'] <= df[bb_lower_col]
 
-    # 2. Price touches Bollinger Bands
-    touch_lower_bb = df['low'] <= df[bb_lower_col] # Harga menyentuh atau menembus band
-    touch_upper_bb = df['high'] >= df[bb_upper_col]
+    # 2. Volume spike, menandakan panic selling atau kapitulasi.
+    # Menggunakan multiplier 2.8x sesuai permintaan.
+    volume_spike = df['volume'] > (df[vol_ma_col] * 2.8)
 
-    # 3. RSI Divergence (dengan logika shift(3) yang disimulasikan via window pendek)
-    # Bullish Divergence: Harga membuat lower low, tapi RSI membuat higher low (dengan toleransi)
-    price_ll = df['low'] < df['low'].rolling(div_window).min().shift(1) # shift(1) untuk membandingkan dengan window sebelumnya
-    rsi_hl = df[rsi_col] > (df[rsi_col].rolling(div_window).min().shift(1) * (1 - rsi_tolerance))
-    bullish_divergence = price_ll & rsi_hl
+    # 3. Terjadi penurunan harga yang signifikan.
+    # Minimal turun 25% dalam 10 candle terakhir.
+    significant_dump = df['close'].pct_change(10) < -0.25
 
-    # Bearish Divergence: Harga membuat higher high, tapi RSI membuat lower high (dengan toleransi)
-    price_hh = df['high'] > df['high'].rolling(div_window).max().shift(1)
-    rsi_lh = df[rsi_col] < (df[rsi_col].rolling(div_window).max().shift(1) * (1 + rsi_tolerance))
-    bearish_divergence = price_hh & rsi_lh
+    # 4. Kondisi oversold yang ekstrem.
+    # RSI di bawah 35.
+    is_oversold = df[rsi_col] < 35
 
-    # 4. Reversal Candle Shape (Hammer / Shooting Star) - Logika dilonggarkan
-    candle_range = (df['high'] - df['low']).replace(0, np.nan)
-    candle_body = abs(df['close'] - df['open'])
-    upper_wick = df['high'] - df[['open', 'close']].max(axis=1)
-    lower_wick = df[['open', 'close']].min(axis=1) - df['low']
+    # 5. Candle konfirmasi bullish (hijau).
+    # Menandakan tekanan beli mulai masuk setelah dump.
+    confirmation_candle = df['close'] > df['open']
 
-    # PERBAIKAN: Tidak lagi mensyaratkan candle harus hijau/merah, fokus pada bentuk penolakan.
-    is_hammer_shape = (lower_wick / candle_range > wick_min_ratio) & (candle_body / candle_range < body_max_ratio)
-    is_shooting_star_shape = (upper_wick / candle_range > wick_min_ratio) & (candle_body / candle_range < body_max_ratio)
+    # --- Gabungkan Sinyal (Hanya Long) ---
+    long_signal = (
+        price_at_lower_band &
+        volume_spike &
+        significant_dump &
+        is_oversold &
+        confirmation_candle
+    )
 
-    # --- Gabungkan Sinyal ---
-    long_signal = touch_lower_bb & volume_spike & bullish_divergence & is_hammer_shape
-    short_signal = touch_upper_bb & volume_spike & bearish_divergence & is_shooting_star_shape
+    # Matikan sinyal short secara total untuk strategi ini.
+    short_signal = pd.Series(False, index=df.index)
 
     # --- Exit Parameters ---
     exit_params = {
@@ -784,16 +778,16 @@ STRATEGY_CONFIG = {
     # },
     "AltcoinVolumeBreakoutHunter": {
         "function": signal_version_AltcoinVolumeBreakoutHunter,
-        "weight": 0.40 # Bobot utama untuk momentum
+        "weight": 0.60 # Bobot utama untuk momentum
     },
-    "MemecoinMoonshotHunter": {
-        "function": signal_version_MemecoinMoonshotHunter,
-        "weight": 0.30 # Bobot lebih rendah, high-risk high-reward
-    },
-    "LiquiditySweepReversal": {
-        "function": signal_version_LiquiditySweepReversal,
-        "weight": 0.30 # Bobot komplementer untuk mean-reversion
-    }
+    # "MemecoinMoonshotHunter": {
+    #     "function": signal_version_MemecoinMoonshotHunter,
+    #     "weight": 0.30 # Bobot lebih rendah, high-risk high-reward
+    # },
+    # "LongOnlyCorrectionHunter": {
+    #     "function": signal_version_LongOnlyCorrectionHunter,
+    #     "weight": 0.40 # Bobot komplementer untuk menangkap koreksi
+    # }
     # ,
     # "HybridScalper": {
     #     "function": signal_version_HYBRID_SCALPER,

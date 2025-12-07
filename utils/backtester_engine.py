@@ -695,9 +695,13 @@ class PortfolioBacktester:
             params = CONFIG.get("strategy_params", {}).get(strategy_name, {})
             if params:
                 active_filters_str += f"- **`{strategy_name}`:** "
-                # Ambil 5 parameter pertama untuk keringkasan
-                # --- PERBAIKAN: Tambahkan risk_per_trade secara eksplisit ---
-                param_items = [('risk_per_trade', params.get('risk_per_trade', 'N/A'))] + list(params.items())[:4]
+                # --- PERBAIKAN: Hindari duplikasi 'risk_per_trade' ---
+                # Buat salinan dictionary agar bisa diubah tanpa mempengaruhi config asli.
+                params_copy = params.copy()
+                # Ambil dan hapus risk_per_trade agar tidak muncul dua kali.
+                risk_value = params_copy.pop('risk_per_trade', 'N/A')
+                # Buat daftar parameter dengan risk_per_trade di depan, diikuti 4 parameter lainnya.
+                param_items = [('risk_per_trade', risk_value)] + list(params_copy.items())[:4]
                 active_filters_str += ", ".join([f"`{k}={v}`" for k, v in param_items]) + "\n"
         start_date_str = kwargs.get('start_date').strftime('%Y-%m-%d') if kwargs.get('start_date') else "N/A"
         end_date_str = kwargs.get('end_date').strftime('%Y-%m-%d') if kwargs.get('end_date') else "N/A"

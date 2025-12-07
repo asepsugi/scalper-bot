@@ -84,7 +84,7 @@ CONFIG = {
             "debug_mode": False  # Log kenapa sinyal None
         },
         "AltcoinVolumeBreakoutHunter": {
-            "risk_per_trade": 0.012, # Risiko 1.2% untuk strategi breakout yang lebih agresif
+            "risk_per_trade": 0.015, # Risiko 1.2% untuk strategi breakout yang lebih agresif
             # --- REKOMENDASI OPTIMASI ---
             "breakout_window": 15,
             "volume_spike_multiplier": 4.2,
@@ -109,10 +109,10 @@ CONFIG = {
             "anti_chase_window": 10,
             "sl_multiplier": 2.4,
             "trailing_trigger_rr": 3.0,
-            "trailing_distance_atr": 3.5,
+            "trailing_distance_atr": 3.5, # type: ignore
             "symbol_whitelist": ["PEPEUSDT", "WIFUSDT", "BONKUSDT", "FLOKIUSDT", "MEMEUSDT", "ORDIUSDT", "SATSUSDT"] # Fokus pada memecoin
         },
-        "LiquiditySweepReversal": {
+        "LongOnlyCorrectionHunter": {
             "risk_per_trade": 0.009, # Risiko standar
             # --- PERBAIKAN BERDASARKAN ANALISIS ---
             "volume_spike_multiplier": 2.5, # Dilonggarkan dari 3.0x ke 2.5x
