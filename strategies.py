@@ -531,7 +531,9 @@ def signal_version_AltcoinVolumeBreakoutHunter(df, symbol: str = None):
     # --- Indikator & Kolom yang Dibutuhkan ---
     atr_col = f"ATRr_{CONFIG['atr_period']}"
     vol_ma_col = f"VOL_{CONFIG['volume_lookback']}"
-    required_cols = ['high', 'low', 'close', 'open', 'volume', atr_col, vol_ma_col]
+    # --- BARU: Tambahkan ADX(14) ke kolom yang dibutuhkan ---
+    adx_14_col = "ADX_14"
+    required_cols = ['high', 'low', 'close', 'open', 'volume', atr_col, vol_ma_col, adx_14_col]
 
     # Validasi data
     if any(col not in df.columns for col in required_cols):
@@ -557,6 +559,8 @@ def signal_version_AltcoinVolumeBreakoutHunter(df, symbol: str = None):
     volume_spike_multiplier = params.get("volume_spike_multiplier", 6.5)
     candle_body_ratio = params.get("candle_body_ratio", 0.65)
     anti_chase_pct = params.get("anti_chase_pct", 0.01) # 1% move in last 2 candles
+    # --- BARU: Baca parameter ADX dari config ---
+    adx_veto_threshold = params.get("adx_veto_threshold", 18)
 
     # --- Logika Sinyal ---
 
@@ -583,6 +587,10 @@ def signal_version_AltcoinVolumeBreakoutHunter(df, symbol: str = None):
     price_change_2_candles = abs(df['close'].pct_change(2))
     not_chasing_price = price_change_2_candles < anti_chase_pct
 
+    # 5. (BARU) Veto Filter ADX
+    # Sinyal hanya valid jika ada momentum dump yang terkonfirmasi.
+    momentum_confirmed = df[adx_14_col] > adx_veto_threshold
+
     # 5. (BARU) Filter Tren EMA
     # Memastikan breakout searah dengan tren jangka pendek untuk meningkatkan win rate.
     if params.get("enable_ema_filter", False):
@@ -597,8 +605,8 @@ def signal_version_AltcoinVolumeBreakoutHunter(df, symbol: str = None):
         against_trend = pd.Series(True, index=df.index)
 
     # --- Gabungkan Sinyal ---
-    long_signal = volume_spike & breakout_long & is_strong_candle & not_chasing_price & with_trend
-    short_signal = volume_spike & breakout_short & is_strong_candle & not_chasing_price & against_trend
+    long_signal = volume_spike & breakout_long & is_strong_candle & not_chasing_price & momentum_confirmed & with_trend
+    short_signal = volume_spike & breakout_short & is_strong_candle & not_chasing_price & momentum_confirmed & against_trend
 
     # Terapkan Market Regime Filter jika aktif
     if params.get("enable_regime_filter", False):
@@ -691,7 +699,7 @@ def signal_version_LongOnlyCorrectionHunter(df, symbol: str = None):
     - Tujuan: Menangkap pantulan teknikal (technical bounce) setelah terjadi dump yang signifikan.
     - Logic: Beli saat harga oversold ekstrem di dekat lower BB, dengan konfirmasi volume dan candle bullish.
     """
-    params = CONFIG.get("strategy_params", {}).get("LiquiditySweepReversal", {})
+    params = CONFIG.get("strategy_params", {}).get("LongOnlyCorrectionHunter", {})
 
     # --- Indikator & Kolom ---
     vol_ma_col = f"VOL_{CONFIG['volume_lookback']}"
@@ -703,6 +711,9 @@ def signal_version_LongOnlyCorrectionHunter(df, symbol: str = None):
     bb_std = params.get("bb_std_dev", 1.8)
     bb_lower_col = f'BBL_{bb_period}_{bb_std}'
     bb_upper_col = f'BBU_{bb_period}_{bb_std}'
+    ema50_col = f"EMA_{CONFIG['ema_period']}"
+    ema200_col = "EMA_200"
+    adx_col = f"ADX_{CONFIG['atr_period']}"
     
     # Hitung BB kustom jika belum ada di DataFrame
     if bb_lower_col not in df.columns:
@@ -710,37 +721,63 @@ def signal_version_LongOnlyCorrectionHunter(df, symbol: str = None):
 
     required_cols = [vol_ma_col, rsi_col, atr_col, bb_lower_col, bb_upper_col, 'high', 'low', 'close', 'open']
 
+    # --- PERBAIKAN: Tambahkan kolom untuk pre-filter dump ---
+    required_cols.extend([ema50_col, ema200_col, adx_col])
+
     if any(col not in df.columns for col in required_cols):
         return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
 
-    # --- LOGIKA BARU: Long-Only Correction Hunter ---
-    # Tujuan: Menangkap pantulan teknikal setelah terjadi dump yang signifikan.
+    # =========================================================================
+    # TAHAP 1: PRE-FILTER AUTO-DETEKSI DUMP KERAS
+    # =========================================================================
+    # Kondisi ini harus terpenuhi SEBELUM kita mencari sinyal entry.
+    # Ini berfungsi sebagai filter "universe selection" untuk fokus pada koin yang tepat.
 
-    # 1. Harga menyentuh atau menembus Lower Bollinger Band.
+    # 1. Jarak dari ATH 30-hari & 7-hari
+    max_high_30d = df['high'].rolling(window=30*24*12, min_periods=1).max() # Approx 30 hari di 5m
+    max_high_7d = df['high'].rolling(window=7*24*12, min_periods=1).max() # Approx 7 hari di 5m
+    from_ath_30d_ok = (df['close'] / max_high_30d) < params.get("dump_ath30d_threshold", 0.65)
+    from_ath_7d_ok = (df['close'] / max_high_7d) < params.get("dump_ath7d_threshold", 0.78)
+
+    # 2. Volume Spike Distribusi (vs MA 30 hari)
+    # Kita butuh data harian untuk MA 30 hari, jadi kita aproksimasi dengan MA periode panjang di 5m
+    vol_ma_30d_approx = df['volume'].rolling(window=30*24*12, min_periods=1).mean()
+    volume_dist_ok = df['volume'] > (vol_ma_30d_approx * params.get("dump_vol_ma_multiplier", 2.8))
+
+    # 3. Konfirmasi Downtrend (RSI, EMA, ADX)
+    rsi_downtrend_ok = df[rsi_col] < params.get("dump_rsi_threshold", 45)
+    ema_downtrend_ok = (df['close'] < df[ema50_col]) & (df['close'] < df[ema200_col])
+    adx_downtrend_ok = df[adx_col] > params.get("dump_adx_threshold", 22)
+
+    # Gabungkan semua kondisi pre-filter
+    is_hard_dump_detected = (
+        from_ath_30d_ok &
+        from_ath_7d_ok &
+        volume_dist_ok &
+        rsi_downtrend_ok &
+        ema_downtrend_ok &
+        adx_downtrend_ok
+    )
+
+    # =========================================================================
+    # TAHAP 2: SINYAL ENTRY (HANYA JIKA DUMP KERAS TERDETEKSI)
+    # =========================================================================
+    # Logika ini sama seperti sebelumnya, tapi sekarang hanya aktif jika pre-filter lolos.
+
+    # 1. Harga menyentuh Lower BB (indikasi oversold ekstrem).
     price_at_lower_band = df['low'] <= df[bb_lower_col]
 
-    # 2. Volume spike, menandakan panic selling atau kapitulasi.
-    # Menggunakan multiplier 2.8x sesuai permintaan.
-    volume_spike = df['volume'] > (df[vol_ma_col] * 2.8)
+    # 2. Volume spike kapitulasi (vs MA 20 candle).
+    volume_spike = df['volume'] > (df[vol_ma_col] * params.get("volume_spike_multiplier", 2.5))
 
-    # 3. Terjadi penurunan harga yang signifikan.
-    # Minimal turun 25% dalam 10 candle terakhir.
-    significant_dump = df['close'].pct_change(10) < -0.25
-
-    # 4. Kondisi oversold yang ekstrem.
-    # RSI di bawah 35.
-    is_oversold = df[rsi_col] < 35
-
-    # 5. Candle konfirmasi bullish (hijau).
-    # Menandakan tekanan beli mulai masuk setelah dump.
+    # 3. Candle konfirmasi bullish (hijau).
     confirmation_candle = df['close'] > df['open']
 
     # --- Gabungkan Sinyal (Hanya Long) ---
     long_signal = (
+        is_hard_dump_detected & # <-- KONDISI BARU
         price_at_lower_band &
         volume_spike &
-        significant_dump &
-        is_oversold &
         confirmation_candle
     )
 
@@ -750,11 +787,11 @@ def signal_version_LongOnlyCorrectionHunter(df, symbol: str = None):
     # --- Exit Parameters ---
     exit_params = {
         'sl_multiplier': params.get("sl_multiplier", 2.2),
-        'rr_ratio': 15.0, # Target utama jauh, partial TP akan dieksekusi lebih dulu
-        'partial_tps': params.get("partial_tps", []), # PERBAIKAN: Gunakan partial_tps dari config
+        'rr_ratio': 15.0, # Target utama jauh, partial TP akan dieksekusi lebih dulu.
+        'partial_tps': params.get("partial_tps", []),
         'trailing': {
             "enabled": True,
-            "trigger_rr": params.get("trailing_trigger_rr", 2.5), # PERBAIKAN: Gunakan trigger_rr dari config
+            "trigger_rr": params.get("trailing_trigger_rr", 3.0), # Trailing dimulai setelah 3R
             "distance_atr": 3.0, # Jarak trailing standar
         }
     }
@@ -784,11 +821,10 @@ STRATEGY_CONFIG = {
     #     "function": signal_version_MemecoinMoonshotHunter,
     #     "weight": 0.30 # Bobot lebih rendah, high-risk high-reward
     # },
-    # "LongOnlyCorrectionHunter": {
-    #     "function": signal_version_LongOnlyCorrectionHunter,
-    #     "weight": 0.40 # Bobot komplementer untuk menangkap koreksi
-    # }
-    # ,
+    "LongOnlyCorrectionHunter": {
+        "function": signal_version_LongOnlyCorrectionHunter,
+        "weight": 0.40 # Bobot komplementer untuk menangkap koreksi
+    },
     # "HybridScalper": {
     #     "function": signal_version_HYBRID_SCALPER,
     #     "weight": 0.8  # LOWER weight = contributes signals but doesn't dominate consensus

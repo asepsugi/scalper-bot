@@ -1,74 +1,103 @@
 # Binance Futures Multi-Strategy Scalping Bot
 
-This project is a sophisticated, asynchronous scalping bot designed for Binance Futures. It employs a multi-strategy consensus system to generate trading signals across multiple cryptocurrency pairs simultaneously. The bot is built with modularity, security, and performance in mind, utilizing `ccxt.pro` for real-time data via websockets.
+Proyek ini adalah bot scalping algoritmik canggih untuk Binance Futures, dirancang dengan arsitektur tiga pilar untuk profitabilitas jangka panjang: **(1) Sinyal Konsensus Multi-Strategi**, **(2) Seleksi Aset Dinamis**, dan **(3) Manajemen Risiko Berlapis**. Dibangun dengan `asyncio` dan `ccxt.pro`, bot ini mampu memantau dan mengeksekusi perdagangan di puluhan simbol secara bersamaan dengan performa tinggi.
 
 ## ✨ Key Features
 
--   **Live & Demo Trading**: Separate, robust scripts for both `live_trader.py` and `demo_trader.py` environments.
--   **Real-time Dashboard**: A terminal-based monitor (`live_trader_monitor.py`) to view account balance, active positions, and event logs for both live and demo environments.
--   **Multi-Strategy Consensus**: Combines signals from multiple trading strategies (`strategies.py`) using a weighted scoring system to improve signal quality.
--   **Dynamic Risk Management**: Automatically adjusts risk per trade, max active positions, and leverage based on account balance tiers (`utils/common_utils.py`).
--   **Asynchronous Architecture**: Built with `asyncio` for high performance, capable of monitoring dozens of symbols concurrently without blocking.
--   **Secure Configuration**: Sensitive API keys and tokens are managed securely using a `.env` file, keeping them out of the source code.
--   **Telegram Notifications**: Instant alerts for bot status (start/stop/crash), new orders, filled positions, and critical errors like IP bans.
--   **Resilience & Error Handling**: Includes robust reconnection logic for websockets and graceful handling of API errors and rate limits.
--   **Backtesting Suite**:
-    -   `backtest_market_scanner.py`: Simulates portfolio performance across multiple symbols over a historical period.
-    -   `backtest_strategy_comparation.py`: Compares the performance of different strategies on a single symbol.
+### Pilar 1: Mesin Sinyal & Eksekusi
 
-### 💡 Adding Your Own Strategy
+-   **Konsensus Multi-Strategi**: Menggabungkan sinyal dari berbagai strategi (`strategies.py`) dengan sistem skor berbobot untuk menghasilkan sinyal berkualitas tinggi.
+-   **Profil Entri Dinamis**: Secara otomatis memilih mode eksekusi (`CONTINUATION` atau `PULLBACK`) berdasarkan kondisi pasar, menyesuaikan jenis order (limit/market) dan risiko.
+-   **Logika Exit Canggih**:
+    -   **Partial Take Profits**: Mengamankan keuntungan di beberapa level Risk/Reward (RR).
+    -   **Trailing Stop Loss**: Mengunci keuntungan secara dinamis saat harga bergerak sesuai arah.
+    -   **Exit Berbasis Candle**: Menggunakan penutupan candle untuk eksekusi SL/TP, mengurangi dampak *stop-loss hunting*.
 
-The bot is designed to be modular, making it easy to add your own custom trading strategies. Here’s how:
+### Pilar 2: Seleksi Aset Dinamis
 
-1.  **Open `strategies.py`**: This file contains all the trading logic.
+-   **Rotasi Whitelist Mingguan**: Secara otomatis memindai ratusan koin setiap minggu untuk memilih 20 koin "paling panas" berdasarkan skor momentum (volume & kenaikan harga), memastikan bot selalu berdagang di aset yang relevan.
+-   **Filter Market Regime**: Strategi dapat dilengkapi dengan filter untuk hanya aktif dalam kondisi pasar tertentu (misalnya, tren kuat vs. *ranging*), menghindari *choppy market*.
 
-2.  **Define Your Strategy Function**: Create a new Python function that accepts a pandas DataFrame (`df`) as input. This DataFrame will contain the OHLCV data and all pre-calculated indicators. Your function must return three items:
-    -   `long_signals`: A pandas Series of booleans indicating a buy signal.
-    -   `short_signals`: A pandas Series of booleans indicating a sell signal.
-    -   `exit_params`: A dictionary specifying the Stop Loss (`sl_multiplier`) and Risk-Reward Ratio (`rr_ratio`) for your strategy.
+### Pilar 3: Manajemen Risiko Berlapis
+
+-   **Drawdown Circuit Breaker**: Secara otomatis menghentikan semua aktivitas trading jika drawdown akun melebihi ambang batas (misal, 10%), dengan periode *cooldown* yang meningkat pada pemicu berikutnya.
+-   **Killswitch Kinerja Mingguan**: Menghentikan bot selama 72 jam jika kerugian dalam seminggu mencapai batas yang ditentukan (misal, -8%), mencegah kerugian besar.
+-   **Skala Posisi Otomatis**: Mengurangi ukuran posisi setelah 2 kekalahan beruntun dan meningkatkannya (hingga 1.5x) setelah 3 kemenangan beruntun.
+-   **Manajemen Risiko Per Trade**: Ukuran posisi dihitung secara presisi berdasarkan persentase risiko yang ditetapkan per trade, jarak stop-loss, dan total ekuitas akun.
+
+### Alat Pendukung & Lainnya
+
+-   **Backtester Portofolio Realistis**: `backtest_market_scanner.py` mensimulasikan perdagangan di banyak simbol secara kronologis, lengkap dengan simulasi rotasi *whitelist* dan ranking volume historis untuk hasil yang akurat.
+-   **Skrip Diagnostik**: `diagnostic.py` membantu menganalisis mengapa sinyal tidak muncul, memeriksa kualitas data, dan mengevaluasi ambang batas konsensus.
+-   **Arsitektur Asinkron**: Dibangun dengan `asyncio` untuk performa tinggi, memantau puluhan simbol secara bersamaan tanpa *blocking*.
+-   **Notifikasi Telegram**: Peringatan instan untuk status bot, order, eksekusi, dan error kritis.
+
+## 💡 Menambahkan Strategi Baru
+
+Bot ini dirancang secara modular, memudahkan penambahan strategi trading kustom Anda.
+
+1.  **Buka `strategies.py`**: File ini berisi semua logika trading.
+
+2.  **Buat Fungsi Strategi Anda**: Buat fungsi Python baru yang menerima DataFrame (`df`) dan `symbol` (opsional). Fungsi ini harus mengembalikan tiga item: `long_signals`, `short_signals`, dan `exit_params`.
 
     ```python
-    # Example of a new strategy function in strategies.py
-    def signal_my_awesome_strategy(df):
-        exit_params = {'sl_multiplier': 2.0, 'rr_ratio': 1.5}
-        long_condition = (df['rsi_15m'] < 30) & (df['close'] > df['EMA_200'])
-        short_condition = (df['rsi_15m'] > 70) & (df['close'] < df['EMA_200'])
+    # Contoh strategi baru yang dapat dikonfigurasi di strategies.py
+    def signal_version_MyNewStrategy(df, symbol: str = None):
+        # Baca parameter dari config.py
+        params = CONFIG.get("strategy_params", {}).get("MyNewStrategy", {})
+        
+        # Ambil nilai dari config atau gunakan default
+        rsi_oversold = params.get("rsi_oversold", 30)
+        ema_period = params.get("ema_period", 200)
+        
+        # Logika sinyal
+        long_condition = (df[f"RSI_{CONFIG['rsi_period']}"] < rsi_oversold) & (df['close'] > df[f"EMA_{ema_period}"])
+        short_condition = pd.Series(False, index=df.index) # Strategi ini long-only
+        
+        # Parameter exit
+        exit_params = {
+            'sl_multiplier': params.get("sl_multiplier", 2.0),
+            'rr_ratio': params.get("rr_ratio", 1.5),
+            'partial_tps': [(2.0, 0.50)], # Jual 50% di 2R
+            'trailing': {"enabled": True, "trigger_rr": 1.5, "distance_atr": 2.5}
+        }
         return long_condition, short_condition, exit_params
     ```
 
-3.  **Register Your Strategy**: Scroll to the bottom of `strategies.py` and add your new strategy to the `STRATEGY_CONFIG` dictionary. Give it a unique name, point to the function you just created, and assign it a `weight`. The weight determines its influence in the consensus signal.
+3.  **Daftarkan Strategi Anda**: Di bagian bawah `strategies.py`, tambahkan strategi baru Anda ke kamus `STRATEGY_CONFIG`. Beri nama unik, arahkan ke fungsi yang baru dibuat, dan berikan `weight` (bobot).
 
     ```python
-    # Add your strategy to the dictionary in strategies.py
-    "MyAwesomeStrategy": {
-        "function": signal_my_awesome_strategy,
-        "weight": 1.5 # Give it a higher weight if you trust it more
+    # Tambahkan strategi Anda ke kamus di strategies.py
+    "MyNewStrategy": {
+        "function": signal_version_MyNewStrategy,
+        "weight": 0.5 # Beri bobot sesuai kepercayaan Anda pada strategi ini
     }
     ```
 
-4.  **(Optional) Add New Indicators**: If your strategy requires an indicator that isn't already calculated (e.g., Bollinger Bands), you'll need to add its calculation to the `calculate_indicators` function in `indicators.py`.
+4.  **(Opsional) Tambah Parameter & Indikator**:
+    -   Tambahkan blok konfigurasi untuk strategi baru Anda di `config.py` di bawah `strategy_params`.
+    -   Jika strategi Anda memerlukan indikator baru, tambahkan perhitungannya di `indicators.py`.
 
 ## 📂 Project Structure
 
 ```
 .
-├── cache/                # Caches historical market data to speed up restarts
-├── output/               # Stores logs and position state files
-├── utils/                # Utility functions (risk management, data preparation)
-├── .env                  # (You create this) Securely stores your API keys and tokens
-├── .env.example          # Template for the .env file
-├── .gitignore            # Specifies files for Git to ignore
-├── backtest_market_scanner.py # Backtester for multi-symbol portfolio simulation
-├── BACKTEST_LOG.md       # (You update this) Log for your backtest results
-├── backtest_strategy_comparation.py # Backtester to compare strategies
-├── config.py             # Main configuration for strategies and bot parameters
-├── demo_trader.py        # Main script for running the bot on Binance Testnet
-├── indicators.py         # Functions for calculating technical indicators (RSI, EMA, etc.)
-├── live_trader.py        # Main script for running the bot in the LIVE environment
-├── live_trader_monitor.py# Real-time terminal dashboard
-├── main.py               # (Legacy) Single-symbol analysis script
-├── requirements.txt      # List of Python dependencies
-└── strategies.py         # All trading strategy logic is defined here
+├── cache/                # Menyimpan cache data pasar historis
+├── output/               # Menyimpan log, state posisi, dan hasil backtest
+├── utils/                # Fungsi utilitas (manajemen risiko, persiapan data)
+├── .env                  # (Anda buat) Menyimpan API key dan token secara aman
+├── .env.example          # Template untuk file .env
+├── .gitignore            # File yang diabaikan oleh Git
+├── backtest_market_scanner.py # Backtester portofolio multi-simbol
+├── backtest_strategy_comparation.py # Backtester untuk membandingkan strategi
+├── config.py             # Konfigurasi utama untuk parameter bot dan strategi
+├── diagnostic.py         # Skrip untuk mendiagnosis masalah sinyal dan data
+├── demo_trader.py        # Skrip utama untuk menjalankan bot di Testnet
+├── indicators.py         # Fungsi untuk menghitung indikator teknis
+├── live_trader.py        # Skrip utama untuk menjalankan bot di lingkungan LIVE
+├── live_trader_monitor.py # Dashboard terminal real-time
+├── requirements.txt      # Daftar library Python yang dibutuhkan
+└── strategies.py         # Semua logika strategi trading didefinisikan di sini
 ```
 
 ## 🚀 Setup and Installation
@@ -80,47 +109,31 @@ The bot is designed to be modular, making it easy to add your own custom trading
     ```
 
 2.  **Create a Virtual Environment**
-    It's highly recommended to use a virtual environment to manage dependencies.
+    Sangat disarankan untuk menggunakan virtual environment.
     ```bash
     python -m venv venv
     ```
-    Activate it:
+    Aktifkan:
     -   **Windows**: `.\venv\Scripts\activate`
     -   **macOS/Linux**: `source venv/bin/activate`
 
 3.  **Install Dependencies**
-    Install all the required Python libraries from `requirements.txt`.
     ```bash
     pip install -r requirements.txt
     ```
 
 4.  **Configure Credentials**
-    Copy the example environment file and fill in your details.
+    Salin file contoh `.env` dan isi detail Anda.
     ```bash
     cp .env.example .env
     ```
-    Now, edit the `.env` file with your actual Binance API keys (for both live and testnet) and your Telegram bot token/chat ID.
-
-    ```
-    # Binance Testnet API Credentials
-    TESTNET_API_KEY="YOUR_TESTNET_API_KEY"
-    TESTNET_API_SECRET="YOUR_TESTNET_API_SECRET"
-
-    # Binance Live API Credentials
-    LIVE_API_KEY="YOUR_LIVE_API_KEY"
-    LIVE_API_SECRET="YOUR_LIVE_API_SECRET"
-
-    # Telegram Bot Credentials
-    TELEGRAM_BOT_TOKEN="YOUR_TELEGRAM_BOT_TOKEN"
-    TELEGRAM_CHAT_ID="YOUR_TELEGRAM_CHAT_ID"
-    ```
-    **Security Note**: The `.gitignore` file is already configured to prevent your `.env` file from being committed to Git.
+    Edit file `.env` dengan API key Binance (live & testnet) dan token/chat ID Telegram Anda.
 
 ## ⚙️ Usage
 
-Make sure your virtual environment is activated before running any scripts.
+Pastikan virtual environment Anda aktif sebelum menjalankan skrip apa pun.
 
-### Running the Trading Bots
+### Menjalankan Trading Bots
 
 -   **Run the LIVE Trader:**
     ```bash
@@ -132,9 +145,9 @@ Make sure your virtual environment is activated before running any scripts.
     python demo_trader.py
     ```
 
-### Running the Monitor
+### Menjalankan Monitor
 
-The monitor can be run in a separate terminal window to watch the bot's activity.
+Jalankan monitor di terminal terpisah untuk memantau aktivitas bot.
 
 -   **Monitor the LIVE Environment:**
     ```bash
@@ -146,39 +159,35 @@ The monitor can be run in a separate terminal window to watch the bot's activity
     python live_trader_monitor.py --env demo
     ```
 
-### Running the Backtesters
-
-The project includes powerful backtesting scripts to evaluate your strategies before deploying them.
+### Menjalankan Backtesters & Diagnostics
 
 -   **Market Scanner (`backtest_market_scanner.py`)**:
-    This script runs a portfolio simulation across many symbols to see how your combined strategies perform in different market conditions.
-
+    Jalankan simulasi portofolio di banyak simbol untuk mengevaluasi performa gabungan strategi.
     ```bash
-    # Run with default settings (top 50 symbols, 1500 candles)
-    python backtest_market_scanner.py
+    # Jalankan backtest pada 50 simbol teratas untuk periode Q4 2025
+    # Gunakan --historical-ranking untuk hasil yang lebih realistis
+    python backtest_market_scanner.py --start_date 2025-10-01 --end_date 2025-12-31 --max_symbols 50 --historical-ranking
+    ```
 
-    # Run a deeper backtest on more symbols and a longer history
-    python backtest_market_scanner.py --max_symbols 100 --limit 10000
+-   **Diagnostic Tool (`diagnostic.py`)**:
+    Gunakan skrip ini jika backtester Anda tidak menghasilkan sinyal.
+    ```bash
+    python diagnostic.py --symbols 5 --start_date 2025-10-01
     ```
 
 -   **Strategy Comparer (`backtest_strategy_comparation.py`)**:
-    This script tests each strategy individually against a portfolio of symbols and provides a comparative performance analysis.
+    Uji setiap strategi secara individual pada portofolio simbol.
     ```bash
-    python backtest_strategy_comparation.py --max_symbols 20 --limit 1500
+    python backtest_strategy_comparation.py --max_symbols 20 --limit 2500
     ```
 
 ## 🔧 Configuration
 
-Most of the bot's behavior can be tweaked in `config.py` and `strategies.py`.
+Sebagian besar perilaku bot dapat diatur di `config.py`.
 
--   **`config.py`**:
-    -   `CONFIG`: Adjust core indicator parameters like RSI period, EMA lengths, etc.
-    -   `LIVE_TRADING_CONFIG`: Set global parameters for the live/demo bots, such as max symbols to trade, risk per trade, and the consensus ratio.
-    -   `LEVERAGE_MAP`: Define custom leverage for specific symbols or set a default.
+-   `strategy_params`: Atur parameter untuk setiap strategi secara individual.
+-   `LIVE_TRADING_CONFIG`: Konfigurasi parameter global untuk bot live, seperti batas rugi harian, *circuit breaker*, dan rasio konsensus.
+-   `WHITELIST_ROTATION_CONFIG`: Atur interval dan kriteria untuk rotasi *whitelist* mingguan.
+-   `EXECUTION`: Konfigurasi logika eksekusi, termasuk TP parsial dan *trailing stop*.
+-   `LEVERAGE_MAP`: Tentukan leverage kustom untuk simbol tertentu.
 
--   **`strategies.py`**:
-    -   `STRATEGY_CONFIG`: This dictionary is the control center for your strategies. You can enable/disable strategies by commenting them out, and adjust their `weight` in the consensus scoring.
-
-## ⚠️ Disclaimer
-
-This trading bot is provided for educational and experimental purposes only. Trading cryptocurrencies, especially with leverage, involves substantial risk and may not be suitable for every investor. You are solely responsible for any financial losses. The creators of this software are not liable for any losses incurred. **Do not use this bot with real money unless you fully understand the code and the risks involved.** Always start with `demo_trader.py` to test your strategies.

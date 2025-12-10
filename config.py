@@ -84,12 +84,14 @@ CONFIG = {
             "debug_mode": False  # Log kenapa sinyal None
         },
         "AltcoinVolumeBreakoutHunter": {
-            "risk_per_trade": 0.015, # Risiko 1.2% untuk strategi breakout yang lebih agresif
+            "risk_per_trade": 0.025, # Risiko 2.5% untuk strategi breakout yang lebih agresif
             # --- REKOMENDASI OPTIMASI ---
-            "breakout_window": 15,
-            "volume_spike_multiplier": 4.2,
+            "breakout_window": 12,
+            "volume_spike_multiplier": 4.0, # 3.5-4.0x, kita ambil tengah
             "candle_body_ratio": 0.58,
-            "anti_chase_pct": 0.05,
+            "anti_chase_pct": 0.08, # Maksimal naik 8%
+            # --- BARU: Filter ADX yang dapat dikonfigurasi ---
+            "adx_veto_threshold": 18, # Filter momentum dump, hindari sideways chop
             "sl_multiplier": 2.9,
             "trailing_trigger_rr": 2.2,
             "trailing_distance_atr": 3.2,
@@ -115,20 +117,25 @@ CONFIG = {
         "LongOnlyCorrectionHunter": {
             "risk_per_trade": 0.009, # Risiko standar
             # --- PERBAIKAN BERDASARKAN ANALISIS ---
-            "volume_spike_multiplier": 2.5, # Dilonggarkan dari 3.0x ke 2.5x
+            "volume_spike_multiplier": 2.5, # Untuk konfirmasi entry (vs MA20)
             "sl_multiplier": 2.2,
-            "rsi_divergence_window": 8, # Dipersempit dari 12 ke 5 untuk menangkap micro-divergence
-            "rsi_divergence_tolerance": 0.08, # Toleransi 5% untuk RSI low
-            "candle_body_max_ratio": 0.4, # Badan candle maksimal 40% dari range (melonggarkan dari 30%)
-            "candle_wick_min_ratio": 0.6, # Sumbu bawah/atas minimal 60% dari range
             "bb_period": 20, # Periode Bollinger Bands
-            "bb_std_dev": 2.0, # Dibuat lebih sensitif (dari 2.0 ke 1.8)
-            # ------------------------------------
+            "bb_std_dev": 1.8, # Dibuat lebih sensitif (dari 2.0 ke 1.8)
+            
+            # --- BARU: Parameter Auto-Deteksi Dump Keras (Pre-Filter) ---
+            "dump_ath30d_threshold": 0.65,   # close < 65% dari ATH 30 hari (dump >35%)
+            "dump_ath7d_threshold": 0.78,    # close < 78% dari ATH 7 hari (dump >22%)
+            "dump_vol_ma_multiplier": 2.8,   # Volume > 2.8x MA volume 30 hari
+            "dump_rsi_threshold": 45,        # RSI < 45 (konfirmasi momentum bearish)
+            "dump_adx_threshold": 22,        # ADX > 22 (konfirmasi tren bearish kuat)
+            # -------------------------------------------------------------
+            
+            # --- Exit Strategy ---
             "partial_tps": [
                 (4.0, 0.50), # Jual 50% di 4R
                 (8.0, 0.30)  # Jual 30% di 8R
             ],
-            "trailing_trigger_rr": 2.5 # Mulai trailing setelah TP pertama
+            "trailing_trigger_rr": 3.0 # Mulai trailing setelah 3R
         }
     },
 

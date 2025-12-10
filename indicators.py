@@ -267,6 +267,8 @@ def calculate_indicators(df):
             # TREND STRENGTH
             # =========================================================================
             df.ta.adx(length=CONFIG["atr_period"], append=True)
+            # --- BARU: Tambahkan ADX(14) khusus untuk AltcoinVolumeBreakoutHunter ---
+            df.ta.adx(length=14, append=True)
             df.ta.supertrend(length=10, multiplier=3.0, append=True)
             
             # =========================================================================

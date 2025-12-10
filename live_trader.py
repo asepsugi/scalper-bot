@@ -742,7 +742,7 @@ class LiveTrader:
                     cooldown_levels = cb_config.get("cooldown_hours", [2, 6, 24])
                     cooldown_hours = cooldown_levels[min(self.drawdown_trigger_level, len(cooldown_levels) - 1)]
                     self.drawdown_cooldown_until = datetime.now() + pd.Timedelta(hours=cooldown_hours)
-                    msg = f"🚨 *DRAWDOWN CIRCUIT BREAKER (Level {self.drawdown_trigger_level + 1}) TERPICU!* 🚨\nDrawdown mencapai {drawdown_pct:.2%}. Semua trading dihentikan selama {cooldown_hours} jam."
+                    msg = f"🚨 *DRAWDOWN CIRCUIT BREAKER (Level {self.drawdown_trigger_level + 1}) TERPICU!* 🚨\nDrawdown mencapai *{drawdown_pct:.2%}*. Semua trading dihentikan selama *{cooldown_hours} jam*."
                     await self.log_event(msg.replace("*", ""))
                     await notifier.send_message(msg)
                     # PERBAIKAN KRUSIAL: Reset peak balance ke balance saat ini untuk siklus berikutnya.
@@ -775,6 +775,7 @@ class LiveTrader:
                     msg = f"KILLSWITCH: Minggu baru dimulai. Balance awal PnL mingguan diatur ke ${self.weekly_pnl_start_balance:.2f}."
                     console.log(f"[cyan]{msg}[/cyan]")
                     await self.log_event(msg)
+                    await notifier.send_message(f"🗓️ *Reset PnL Mingguan*\nBalance awal untuk minggu ini: `${self.weekly_pnl_start_balance:,.2f}` USDT. Killswitch direset.")
                 except Exception as e:
                     console.log(f"[red]KILLSWITCH: Gagal mereset PnL mingguan: {e}[/red]")
             
