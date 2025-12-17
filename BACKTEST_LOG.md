@@ -1,6 +1,56 @@
 
 ---
 
+## Backtest: 2025-12-17 11:52:26
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.5`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `adx_is_rising=True`, `bbw_percentile_min=0.1`, `bbw_percentile_max=0.6`, `sl_multiplier=1.9`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `UNIUSDT, TIAUSDT, SUIUSDT, AAVEUSDT, ARBUSDT...`
+- **Minggu 33:** `UNIUSDT, TIAUSDT, BCHUSDT, SUIUSDT, HYPEUSDT...`
+- **Minggu 34:** `PUMPUSDT, UNIUSDT, BCHUSDT, TIAUSDT, SUIUSDT...`
+- **Minggu 35:** `PUMPUSDT, UNIUSDT, BCHUSDT, HYPEUSDT, CRVUSDT...`
+- **Minggu 36:** `UNIUSDT, BCHUSDT, HYPEUSDT, ARBUSDT, LTCUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $1.37 | 25 | 40.00% |
+| `MomentumCrossHunter` | 0.4 | $-44.62 | 75 | 33.33% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $31.75                     |
+| **Net Profit**    | **$-43.25 (-57.67%)** |
+| Total Trades      | 100                         |
+| Win Rate          | 35.00%                     |
+|  - Long Win Rate  | 53 trades (32.08%)              |
+|  - Short Win Rate | 47 trades (38.30%)             |
+| Profit Factor     | 0.54                       |
+| Max Drawdown      | 63.10%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 21 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
 ## Backtest: 2025-12-17 11:50:58
 
 **Parameter:**
