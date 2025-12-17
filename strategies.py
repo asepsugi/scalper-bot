@@ -613,6 +613,12 @@ def signal_version_AltcoinVolumeBreakoutHunter(df, symbol: str = None):
         long_signal = long_signal & regime_filter
         short_signal = short_signal & regime_filter
 
+    # --- PERBAIKAN: Terapkan filter arah sinyal (seperti MCH) ---
+    if not params.get("allow_long", True):
+        long_signal = pd.Series(False, index=df.index)
+    if not params.get("allow_short", True):
+        short_signal = pd.Series(False, index=df.index)
+
     # --- Metadata & Parameter Exit ---
     # Sesuai permintaan: SL 2.8x ATR, Trailing start 2R, distance 3.0x ATR,
     # Partial TPs di 5R (50%) dan 10R (30%).
@@ -813,8 +819,12 @@ def signal_version_MomentumCrossHunter(df, symbol: str = None):
     rsi_confirm_short = df[rsi_col] < params.get("rsi_threshold_short", 50)
 
     # 4. Konfirmasi MACD
-    macd_confirm_long = df['MACD_12_26_9'] > df['MACDs_12_26_9']
-    macd_confirm_short = df['MACD_12_26_9'] < df['MACDs_12_26_9']
+    if params.get("use_macd_confirm", True):
+        macd_confirm_long = df['MACD_12_26_9'] > df['MACDs_12_26_9']
+        macd_confirm_short = df['MACD_12_26_9'] < df['MACDs_12_26_9']
+    else:
+        macd_confirm_long = pd.Series(True, index=df.index)
+        macd_confirm_short = pd.Series(True, index=df.index)
 
     # --- PERBAIKAN: Mode Extreme Test ---
     if params.get("extreme_test_mode", False):
@@ -890,6 +900,13 @@ def signal_version_MomentumCrossHunter(df, symbol: str = None):
                        long_htf_ok & trend_is_strong_enough & long_di_ok & volatility_ok)
         short_signal = (cross_down_event & below_long_term_trend & rsi_confirm_short & macd_confirm_short &
                         short_htf_ok & trend_is_strong_enough & short_di_ok & volatility_ok)
+
+    # --- PERBAIKAN: Terapkan filter arah sinyal ---
+    if not params.get("allow_long", True):
+        long_signal = pd.Series(False, index=df.index)
+    if not params.get("allow_short", True):
+        short_signal = pd.Series(False, index=df.index)
+
 
     # --- Exit Parameters ---
     # Menggunakan parameter yang sudah dioptimalkan sesuai analisis.
