@@ -953,7 +953,7 @@ STRATEGY_CONFIG = {
     # },
     "MomentumCrossHunter": {
         "function": signal_version_MomentumCrossHunter,
-        "weight": 0.20 # PERBAIKAN: Bobot diturunkan karena sedang di-tuning ulang
+        "weight": 0.40 # PERBAIKAN: Bobot diturunkan karena sedang di-tuning ulang
     },
     # "HybridScalper": {
     #     "function": signal_version_HYBRID_SCALPER,

@@ -100,8 +100,8 @@ CONFIG = {
             "allow_short": True,             # Fokus pada kekuatan sinyal short
             "enable_ema_filter": True,
             "symbol_blacklist": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ZECUSDT", "ADAUSDT", "AVAXUSDT", 
-                                 "LINKUSDT", "HYPEUSDT", "TRUTHUSDT", "FHEUSDT", "MONUSDT", "ASTERUSDT", "PIPPINUSDT", "CRVUSDT", "FARTCOINUSDT"
-                                 "EDENUSDT", "XPLUSDT", "FARTCOINUSDT", "ARCUSDT", "FORMUSDT"
+                                 "LINKUSDT", "HYPEUSDT", "TRUTHUSDT", "FHEUSDT", "PIPPINUSDT", "CRVUSDT", "FARTCOINUSDT"
+                                 "XPLUSDT", "FARTCOINUSDT", "ARCUSDT", "FORMUSDT"
                                 ],
             # --- PILAR 1: MARKET REGIME FILTER ---
             "enable_regime_filter": True,
@@ -147,22 +147,22 @@ CONFIG = {
             "risk_per_trade": 0.012,
             # --- PERBAIKAN: Filter Entry yang Diperketat ---
             # --- BARU: Mode Extreme Test ---
-            "extreme_test_mode": False,       # Jika True, hanya gunakan EMA cross + RSI confirm.
-            "use_htf_filter": True,          # Filter 1: Gunakan filter tren timeframe 1 jam (EMA 200).
-            "min_adx_level": 19,             # Filter 2: DILONGGARKAN. ADX harus di atas 20 (dari 23).
+            "extreme_test_mode": False,      # PASTIKAN SELALU False untuk backtest serius.
+            "use_htf_filter": False,         # PERBAIKAN: Nonaktifkan. Terlalu ketat untuk sinyal crossover.
+            "min_adx_level": 19,             # PERBAIKAN: Gunakan 19, terbukti profitabel di backtest sebelumnya.
             "use_di_filter": False,           # Filter 3: +DI harus > -DI untuk long (dan sebaliknya).
             # --- PERBAIKAN: Logika Volatilitas yang Lebih Fleksibel ---
             "use_volatility_filter": True,  # BARU: Nonaktifkan sementara untuk diagnostik (default: True)
-            "strict_alignment": False,       # BARU: Jika False, above_long_term_trend hanya cek EMA25 vs EMA99
+            "strict_alignment": False,       # PERBAIKAN: Gunakan mode longgar, terbukti lebih baik untuk menangkap sinyal awal.
             "use_volatility_or_logic": True, # Jika True, (Filter 4 OR Filter 5). Jika False, (Filter 4 AND Filter 5)
-            "bbw_is_expanding_window": 8,    # Filter 4: BBW harus lebih besar dari nilainya 3 candle lalu.
-            "bbw_min_percentile": 0.18,      # Filter 5: DILONGGARKAN. BBW harus di atas percentile 30% (dari 35%).
+            "bbw_is_expanding_window": 10,    # Filter 4: BBW harus lebih besar dari nilainya 3 candle lalu.
+            "bbw_min_percentile": 0.15,      # Filter 5: DILONGGARKAN. BBW harus di atas percentile 30% (dari 35%).
             # --- PERBAIKAN: Loosen RSI confirm ---
             "rsi_threshold_long": 45,        # Kembali ke 50 untuk pengujian murni
             "rsi_threshold_short": 55,       # Kembali ke 50 untuk pengujian murni
-            "use_macd_confirm": False,       # BARU: Nonaktifkan konfirmasi MACD untuk mengurangi lag
+            "use_macd_confirm": True,        # Konfirmasi MACD penting untuk menghindari sinyal palsu.
             # --- BARU: Kontrol Arah Sinyal ---
-            "allow_long": True,             # Blokir sinyal long untuk sementara
+            "allow_long": False,             # Blokir sinyal long untuk sementara
             "allow_short": True,             # Izinkan sinyal short
             # --- PERBAIKAN: Manajemen Stop-Loss & Exit ---
             "sl_multiplier": 3.3,            # SL lebih longgar untuk mengakomodasi volatilitas.
@@ -174,10 +174,7 @@ CONFIG = {
 
             # --- PERBAIKAN: Adaptasi Aset ---
             "symbol_blacklist": [
-                "PUMPUSDT", "PEPEUSDT", "BONKUSDT", "FLOKIUSDT", "MEMEUSDT", "ORDIUSDT", "1000SATSUSDT", "AAVEUSDT", "XPLUSDT"
-                "FARTCOINUSDT", "WIFUSDT", "PIPPINUSDT", "PAXGUSDT", "SUIUSDT", "HYPEUSDT", "MONUSDT", "PENGUUSDT", "BCHUSDT", 
-                "XPLUSDT", "LTCUSDT", "WLDUSDT", "FORMUSDT", "ENAUSDT", "OMUSDT", "NEARUSDT", "CRVUSDT", "1000PEPEUSDT",
-                "LUNA2USDT", "ETCUSDT", "FILUSDT"
+                "PUMPUSDT", "PEPEUSDT", "1000PEPEUSDT", "BONKUSDT", "FLOKIUSDT", "MEMEUSDT", "FARTCOINUSDT", "TRUTHUSDT"
             ]
         }
     }, # <-- PERBAIKAN: Tambahkan koma yang hilang di sini
