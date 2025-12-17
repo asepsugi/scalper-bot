@@ -105,6 +105,54 @@ def analyze_trades(file_path: Path):
     else:
         console.print("\n[bold green]Tidak ada trade yang ditutup oleh 'Circuit Breaker'. Kerugian kemungkinan disebabkan oleh akumulasi stop loss normal (death by a thousand cuts).[/bold green]")
 
+    # --- Analisis 4: Performa Simbol per Strategi ---
+    console.print("\n[bold magenta]--- Analisis Performa Simbol per Strategi ---[/bold magenta]")
+    if 'Strategy' not in df.columns:
+        console.print("[yellow]Kolom 'Strategy' tidak ditemukan. Analisis ini dilewati.[/yellow]")
+        return
+
+    # Agregasi data
+    strategy_symbol_pnl = df.groupby(['Strategy', 'Symbol']).agg(
+        total_pnl=('PnL (USD)', 'sum'),
+        trade_count=('PnL (USD)', 'count'),
+        win_rate=('PnL (USD)', lambda pnl: (pnl > 0).sum() / len(pnl) * 100)
+    ).reset_index()
+
+    # Tampilkan ringkasan untuk setiap strategi
+    for strategy_name in strategy_symbol_pnl['Strategy'].unique():
+        strategy_df = strategy_symbol_pnl[strategy_symbol_pnl['Strategy'] == strategy_name]
+        worst_symbols = strategy_df.sort_values(by='total_pnl').head(5)
+
+        if worst_symbols.empty:
+            continue
+
+        table = Table(title=f"Simbol Terburuk untuk Strategi: [bold cyan]{strategy_name}[/bold cyan]", show_header=True, header_style="bold red")
+        table.add_column("Simbol")
+        table.add_column("Total PnL (USD)", justify="right")
+        table.add_column("Jumlah Trade", justify="right")
+        table.add_column("Win Rate (%)", justify="right")
+
+        for _, row in worst_symbols.iterrows():
+            table.add_row(row['Symbol'], f"${row['total_pnl']:,.2f}", str(row['trade_count']), f"{row['win_rate']:.2f}%")
+        
+        console.print(table)
+
+        # --- BARU: Tampilkan Simbol Terbaik ---
+        best_symbols = strategy_df.sort_values(by='total_pnl').tail(5).sort_values(by='total_pnl', ascending=False)
+
+        if best_symbols.empty:
+            continue
+
+        table_best = Table(title=f"Simbol Terbaik untuk Strategi: [bold cyan]{strategy_name}[/bold cyan]", show_header=True, header_style="bold green")
+        table_best.add_column("Simbol")
+        table_best.add_column("Total PnL (USD)", justify="right")
+        table_best.add_column("Jumlah Trade", justify="right")
+        table_best.add_column("Win Rate (%)", justify="right")
+
+        for _, row in best_symbols.iterrows():
+            table_best.add_row(row['Symbol'], f"${row['total_pnl']:,.2f}", str(row['trade_count']), f"{row['win_rate']:.2f}%")
+        
+        console.print(table_best)
 
 def main():
     parser = argparse.ArgumentParser(

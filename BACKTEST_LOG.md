@@ -1,6 +1,2206 @@
 
 ---
 
+## Backtest: 2025-12-17 19:54:56
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-18 s/d 2025-12-16 (~4 Bulan 1 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=True`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `ETCUSDT, WLDUSDT, FILUSDT, LTCUSDT, ARBUSDT...`
+- **Minggu 33:** `ETCUSDT, WLDUSDT, PAXGUSDT, FILUSDT, LTCUSDT...`
+- **Minggu 34:** `ETCUSDT, WLDUSDT, PAXGUSDT, FILUSDT, LTCUSDT...`
+- **Minggu 35:** `WLDUSDT, PAXGUSDT, FILUSDT, LTCUSDT, ARBUSDT...`
+- **Minggu 36:** `ETCUSDT, WLDUSDT, FILUSDT, LTCUSDT, ARBUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $78.09 | 28 | 78.57% |
+| `MomentumCrossHunter` | 0.2 | $0.00 | 0 | N/A |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $153.09                     |
+| **Net Profit**    | **$78.09 (+104.12%)** |
+| Total Trades      | 28                         |
+| Win Rate          | 78.57%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 28 trades (78.57%)             |
+| Profit Factor     | 3.65                       |
+| Max Drawdown      | 13.74%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 1 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 19:53:00
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-14 s/d 2025-12-13 (~4 Bulan 2 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `JELLYJELLYUSDT, WIFUSDT, 1000PEPEUSDT, SUIUSDT, AAVEUSDT...`
+- **Minggu 33:** `JELLYJELLYUSDT, WIFUSDT, 1000PEPEUSDT, SUIUSDT, AAVEUSDT...`
+- **Minggu 34:** `JELLYJELLYUSDT, WIFUSDT, 1000PEPEUSDT, SUIUSDT, AAVEUSDT...`
+- **Minggu 35:** `JELLYJELLYUSDT, WIFUSDT, 1000PEPEUSDT, SUIUSDT, AAVEUSDT...`
+- **Minggu 36:** `JELLYJELLYUSDT, WIFUSDT, 1000PEPEUSDT, SUIUSDT, AAVEUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $45.57 | 25 | 60.00% |
+| `MomentumCrossHunter` | 0.2 | $8.38 | 25 | 56.00% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $128.95                     |
+| **Net Profit**    | **$53.95 (+71.93%)** |
+| Total Trades      | 50                         |
+| Win Rate          | 58.00%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 50 trades (58.00%)             |
+| Profit Factor     | 2.39                       |
+| Max Drawdown      | 22.00%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 1 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 19:50:27
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-14 s/d 2025-12-13 (~4 Bulan 2 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `ETCUSDT, DOTUSDT, FILUSDT, WLDUSDT, ENAUSDT...`
+- **Minggu 33:** `ETCUSDT, DOTUSDT, FILUSDT, WLDUSDT, ENAUSDT...`
+- **Minggu 34:** `ETCUSDT, DOTUSDT, FILUSDT, WLDUSDT, ENAUSDT...`
+- **Minggu 35:** `DOTUSDT, FILUSDT, WLDUSDT, ENAUSDT, LTCUSDT...`
+- **Minggu 36:** `ETCUSDT, DOTUSDT, FILUSDT, WLDUSDT, ENAUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $55.27 | 24 | 66.67% |
+| `MomentumCrossHunter` | 0.2 | $14.79 | 23 | 56.52% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $145.06                     |
+| **Net Profit**    | **$70.06 (+93.41%)** |
+| Total Trades      | 47                         |
+| Win Rate          | 61.70%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 47 trades (61.70%)             |
+| Profit Factor     | 2.98                       |
+| Max Drawdown      | 14.35%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 0 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 19:49:04
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-14 s/d 2025-12-13 (~4 Bulan 2 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `OMUSDT, PUMPUSDT, TAOUSDT, AAVEUSDT, WIFUSDT...`
+- **Minggu 33:** `OMUSDT, PUMPUSDT, TAOUSDT, AAVEUSDT, WIFUSDT...`
+- **Minggu 34:** `OMUSDT, PUMPUSDT, TAOUSDT, AAVEUSDT, WIFUSDT...`
+- **Minggu 35:** `OMUSDT, PUMPUSDT, TAOUSDT, AAVEUSDT, WIFUSDT...`
+- **Minggu 36:** `OMUSDT, TAOUSDT, BASUSDT, AAVEUSDT, WIFUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $42.16 | 24 | 62.50% |
+| `MomentumCrossHunter` | 0.2 | $12.68 | 28 | 64.29% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $129.84                     |
+| **Net Profit**    | **$54.84 (+73.11%)** |
+| Total Trades      | 52                         |
+| Win Rate          | 63.46%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 52 trades (63.46%)             |
+| Profit Factor     | 2.33                       |
+| Max Drawdown      | 23.73%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 3 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 19:47:58
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-14 s/d 2025-12-13 (~4 Bulan 2 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `BCHUSDT, LTCUSDT, 1000PEPEUSDT, WLDUSDT, TAOUSDT...`
+- **Minggu 33:** `BCHUSDT, LTCUSDT, 1000PEPEUSDT, WLDUSDT, PAXGUSDT...`
+- **Minggu 34:** `BCHUSDT, LTCUSDT, 1000PEPEUSDT, WLDUSDT, PAXGUSDT...`
+- **Minggu 35:** `BCHUSDT, LTCUSDT, 1000PEPEUSDT, WLDUSDT, PAXGUSDT...`
+- **Minggu 36:** `BCHUSDT, LTCUSDT, 1000PEPEUSDT, WLDUSDT, TAOUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $45.10 | 23 | 60.87% |
+| `MomentumCrossHunter` | 0.2 | $15.46 | 30 | 60.00% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $135.56                     |
+| **Net Profit**    | **$60.56 (+80.74%)** |
+| Total Trades      | 53                         |
+| Win Rate          | 60.38%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 53 trades (60.38%)             |
+| Profit Factor     | 2.47                       |
+| Max Drawdown      | 18.88%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 3 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 19:45:15
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-14 s/d 2025-12-13 (~4 Bulan 2 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `ARBUSDT, PENGUUSDT, SUIUSDT, ETCUSDT, LUNA2USDT...`
+- **Minggu 33:** `ARBUSDT, PENGUUSDT, SUIUSDT, PAXGUSDT, ETCUSDT...`
+- **Minggu 34:** `ARBUSDT, PENGUUSDT, SUIUSDT, PAXGUSDT, ETCUSDT...`
+- **Minggu 35:** `ARBUSDT, PENGUUSDT, SUIUSDT, PAXGUSDT, LUNA2USDT...`
+- **Minggu 36:** `ARBUSDT, PENGUUSDT, SUIUSDT, ETCUSDT, LUNA2USDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $42.36 | 23 | 60.87% |
+| `MomentumCrossHunter` | 0.2 | $6.12 | 33 | 57.58% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $123.48                     |
+| **Net Profit**    | **$48.48 (+64.64%)** |
+| Total Trades      | 56                         |
+| Win Rate          | 58.93%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 56 trades (58.93%)             |
+| Profit Factor     | 2.16                       |
+| Max Drawdown      | 23.25%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 0 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 19:40:16
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-17 s/d 2025-12-13 (~3 Bulan 29 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `UNIUSDT, DOTUSDT, 1000PEPEUSDT, ENAUSDT, PENGUUSDT...`
+- **Minggu 33:** `UNIUSDT, DOTUSDT, 1000PEPEUSDT, ENAUSDT, PENGUUSDT...`
+- **Minggu 34:** `UNIUSDT, DOTUSDT, 1000PEPEUSDT, ENAUSDT, WLDUSDT...`
+- **Minggu 35:** `UNIUSDT, DOTUSDT, 1000PEPEUSDT, ENAUSDT, WLDUSDT...`
+- **Minggu 36:** `UNIUSDT, DOTUSDT, 1000PEPEUSDT, ENAUSDT, BASUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $53.98 | 25 | 60.00% |
+| `MomentumCrossHunter` | 0.2 | $15.01 | 31 | 61.29% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $143.99                     |
+| **Net Profit**    | **$68.99 (+91.98%)** |
+| Total Trades      | 56                         |
+| Win Rate          | 60.71%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 56 trades (60.71%)             |
+| Profit Factor     | 2.62                       |
+| Max Drawdown      | 18.07%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 0 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 19:37:15
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-17 s/d 2025-12-15 (~4 Bulan 1 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `WIFUSDT, FILUSDT, BCHUSDT, SUIUSDT, LUNA2USDT...`
+- **Minggu 33:** `WIFUSDT, BCHUSDT, FILUSDT, SUIUSDT, UNIUSDT...`
+- **Minggu 34:** `WIFUSDT, BCHUSDT, FILUSDT, SUIUSDT, UNIUSDT...`
+- **Minggu 35:** `WIFUSDT, BCHUSDT, FILUSDT, SUIUSDT, LUNA2USDT...`
+- **Minggu 36:** `WIFUSDT, BCHUSDT, FILUSDT, SUIUSDT, LUNA2USDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $35.85 | 24 | 54.17% |
+| `MomentumCrossHunter` | 0.2 | $1.59 | 43 | 44.19% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $112.44                     |
+| **Net Profit**    | **$37.44 (+49.92%)** |
+| Total Trades      | 67                         |
+| Win Rate          | 47.76%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 67 trades (47.76%)             |
+| Profit Factor     | 1.70                       |
+| Max Drawdown      | 26.23%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 0 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 19:31:16
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-11 s/d 2025-12-16 (~4 Bulan 8 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `OMUSDT, SUIUSDT, UNIUSDT, ETCUSDT, FILUSDT...`
+- **Minggu 33:** `OMUSDT, ARCUSDT, SUIUSDT, LTCUSDT, UNIUSDT...`
+- **Minggu 34:** `OMUSDT, ARCUSDT, SUIUSDT, LTCUSDT, UNIUSDT...`
+- **Minggu 35:** `OMUSDT, ARCUSDT, SUIUSDT, LTCUSDT, UNIUSDT...`
+- **Minggu 36:** `OMUSDT, ARCUSDT, SUIUSDT, LTCUSDT, UNIUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $49.54 | 27 | 59.26% |
+| `MomentumCrossHunter` | 0.2 | $11.17 | 32 | 53.12% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $135.70                     |
+| **Net Profit**    | **$60.70 (+80.94%)** |
+| Total Trades      | 59                         |
+| Win Rate          | 55.93%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 59 trades (55.93%)             |
+| Profit Factor     | 2.17                       |
+| Max Drawdown      | 16.00%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 7 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 19:29:00
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-11 s/d 2025-12-16 (~4 Bulan 8 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `UNIUSDT, AAVEUSDT, ENAUSDT, NEARUSDT, SUIUSDT...`
+- **Minggu 33:** `UNIUSDT, AAVEUSDT, ENAUSDT, NEARUSDT, SUIUSDT...`
+- **Minggu 34:** `UNIUSDT, AAVEUSDT, ENAUSDT, NEARUSDT, SUIUSDT...`
+- **Minggu 35:** `UNIUSDT, ENAUSDT, SUIUSDT, ARBUSDT, PAXGUSDT...`
+- **Minggu 36:** `UNIUSDT, ENAUSDT, NEARUSDT, SUIUSDT, ARBUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $37.09 | 34 | 50.00% |
+| `MomentumCrossHunter` | 0.2 | $38.58 | 44 | 61.36% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $150.68                     |
+| **Net Profit**    | **$75.68 (+100.90%)** |
+| Total Trades      | 78                         |
+| Win Rate          | 56.41%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 78 trades (56.41%)             |
+| Profit Factor     | 1.86                       |
+| Max Drawdown      | 17.59%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 1 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:52:44
+
+**Parameter:**
+-   **Simbol:** Top 60 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-11 s/d 2025-12-13 (~4 Bulan 5 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `OMUSDT, BCHUSDT, UNIUSDT, 1000PEPEUSDT, WIFUSDT...`
+- **Minggu 33:** `LTCUSDT, EPICUSDT, OMUSDT, BCHUSDT, 1000PEPEUSDT...`
+- **Minggu 34:** `LTCUSDT, TAOUSDT, BCHUSDT, UNIUSDT, 1000PEPEUSDT...`
+- **Minggu 35:** `LTCUSDT, EPICUSDT, OMUSDT, TAOUSDT, BCHUSDT...`
+- **Minggu 36:** `LTCUSDT, EPICUSDT, OMUSDT, BCHUSDT, 1000PEPEUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $25.44 | 18 | 50.00% |
+| `MomentumCrossHunter` | 0.2 | $20.92 | 29 | 65.52% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $121.36                     |
+| **Net Profit**    | **$46.36 (+61.82%)** |
+| Total Trades      | 47                         |
+| Win Rate          | 59.57%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 47 trades (59.57%)             |
+| Profit Factor     | 1.88                       |
+| Max Drawdown      | 14.24%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 12 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:50:25
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-11 s/d 2025-12-13 (~4 Bulan 5 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `FORMUSDT, SUIUSDT, PENGUUSDT, OMUSDT, PUMPUSDT...`
+- **Minggu 33:** `ARCUSDT, FORMUSDT, SUIUSDT, PENGUUSDT, OMUSDT...`
+- **Minggu 34:** `ARCUSDT, FORMUSDT, SUIUSDT, PENGUUSDT, OMUSDT...`
+- **Minggu 35:** `ARCUSDT, FORMUSDT, SUIUSDT, PENGUUSDT, OMUSDT...`
+- **Minggu 36:** `ARCUSDT, FORMUSDT, SUIUSDT, PENGUUSDT, OMUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $55.13 | 36 | 55.56% |
+| `MomentumCrossHunter` | 0.2 | $16.94 | 36 | 52.78% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $147.07                     |
+| **Net Profit**    | **$72.07 (+96.10%)** |
+| Total Trades      | 72                         |
+| Win Rate          | 54.17%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 72 trades (54.17%)             |
+| Profit Factor     | 1.84                       |
+| Max Drawdown      | 9.74%                      |
+| CB Triggers       | 0                         |
+| Weekly Killswitch | 0 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:47:04
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-11 s/d 2025-12-16 (~4 Bulan 8 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `WLDUSDT, LUNA2USDT, BCHUSDT, PUMPUSDT, ENAUSDT...`
+- **Minggu 33:** `WLDUSDT, BCHUSDT, ARCUSDT, ENAUSDT, CRVUSDT...`
+- **Minggu 34:** `WLDUSDT, BCHUSDT, PUMPUSDT, ARCUSDT, ENAUSDT...`
+- **Minggu 35:** `WLDUSDT, LUNA2USDT, BCHUSDT, PUMPUSDT, CRVUSDT...`
+- **Minggu 36:** `WLDUSDT, LUNA2USDT, BCHUSDT, ARCUSDT, ENAUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $57.56 | 35 | 54.29% |
+| `MomentumCrossHunter` | 0.2 | $17.16 | 44 | 54.55% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $149.72                     |
+| **Net Profit**    | **$74.72 (+99.63%)** |
+| Total Trades      | 79                         |
+| Win Rate          | 54.43%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 79 trades (54.43%)             |
+| Profit Factor     | 1.97                       |
+| Max Drawdown      | 12.76%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 0 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:39:42
+
+**Parameter:**
+-   **Simbol:** Top 70 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-11 s/d 2025-12-16 (~4 Bulan 8 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `NEARUSDT, ETCUSDT, ENAUSDT, SUIUSDT, WIFUSDT...`
+- **Minggu 33:** `ETCUSDT, NEARUSDT, ENAUSDT, SUIUSDT, AVAAIUSDT...`
+- **Minggu 34:** `NEARUSDT, ETCUSDT, ENAUSDT, SUIUSDT, AAVEUSDT...`
+- **Minggu 35:** `ENAUSDT, WIFUSDT, UNIUSDT, WLDUSDT, PENGUUSDT...`
+- **Minggu 36:** `ETCUSDT, NEARUSDT, ENAUSDT, AVAAIUSDT, WIFUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $31.66 | 33 | 48.48% |
+| `MomentumCrossHunter` | 0.2 | $4.43 | 44 | 50.00% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $111.09                     |
+| **Net Profit**    | **$36.09 (+48.11%)** |
+| Total Trades      | 77                         |
+| Win Rate          | 49.35%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 77 trades (49.35%)             |
+| Profit Factor     | 1.38                       |
+| Max Drawdown      | 21.83%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 5 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:35:37
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-11 s/d 2025-12-16 (~4 Bulan 8 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `JELLYJELLYUSDT, PUMPUSDT, FILUSDT, ETCUSDT, ENAUSDT...`
+- **Minggu 33:** `ETCUSDT, ENAUSDT, 1000PEPEUSDT, NEARUSDT, PAXGUSDT...`
+- **Minggu 34:** `JELLYJELLYUSDT, PUMPUSDT, FILUSDT, ETCUSDT, ENAUSDT...`
+- **Minggu 35:** `JELLYJELLYUSDT, PUMPUSDT, ENAUSDT, PAXGUSDT, ARBUSDT...`
+- **Minggu 36:** `JELLYJELLYUSDT, FILUSDT, ETCUSDT, ENAUSDT, 1000PEPEUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $46.00 | 36 | 47.22% |
+| `MomentumCrossHunter` | 0.2 | $31.55 | 47 | 55.32% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $152.55                     |
+| **Net Profit**    | **$77.55 (+103.39%)** |
+| Total Trades      | 83                         |
+| Win Rate          | 51.81%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 83 trades (51.81%)             |
+| Profit Factor     | 1.85                       |
+| Max Drawdown      | 12.37%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 0 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:33:07
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-11 s/d 2025-12-16 (~4 Bulan 8 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `AAVEUSDT, BCHUSDT, FORMUSDT, PIPPINUSDT, NEARUSDT...`
+- **Minggu 33:** `AAVEUSDT, BCHUSDT, LTCUSDT, FORMUSDT, PIPPINUSDT...`
+- **Minggu 34:** `AAVEUSDT, BCHUSDT, LTCUSDT, FORMUSDT, PIPPINUSDT...`
+- **Minggu 35:** `XPLUSDT, BCHUSDT, LTCUSDT, FORMUSDT, PIPPINUSDT...`
+- **Minggu 36:** `XPLUSDT, BCHUSDT, LTCUSDT, FORMUSDT, PIPPINUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $50.39 | 38 | 50.00% |
+| `MomentumCrossHunter` | 0.2 | $9.69 | 37 | 51.35% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $135.08                     |
+| **Net Profit**    | **$60.08 (+80.10%)** |
+| Total Trades      | 75                         |
+| Win Rate          | 50.67%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 75 trades (50.67%)             |
+| Profit Factor     | 1.71                       |
+| Max Drawdown      | 16.45%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 0 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:31:20
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-11 s/d 2025-12-16 (~4 Bulan 8 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `AAVEUSDT, OMUSDT, ARBUSDT, DOTUSDT, 1000PEPEUSDT...`
+- **Minggu 33:** `AAVEUSDT, OMUSDT, ARCUSDT, DOTUSDT, 1000PEPEUSDT...`
+- **Minggu 34:** `TAOUSDT, AAVEUSDT, ARCUSDT, ARBUSDT, 1000PEPEUSDT...`
+- **Minggu 35:** `TAOUSDT, OMUSDT, ARBUSDT, DOTUSDT, XPLUSDT...`
+- **Minggu 36:** `OMUSDT, ARCUSDT, ARBUSDT, 1000PEPEUSDT, XPLUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $22.07 | 39 | 43.59% |
+| `MomentumCrossHunter` | 0.2 | $27.54 | 44 | 54.55% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $124.61                     |
+| **Net Profit**    | **$49.61 (+66.15%)** |
+| Total Trades      | 83                         |
+| Win Rate          | 49.40%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 83 trades (49.40%)             |
+| Profit Factor     | 1.61                       |
+| Max Drawdown      | 23.94%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 0 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:29:46
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-05 s/d 2025-12-16 (~4 Bulan 14 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `UNIUSDT, ARBUSDT, FARTCOINUSDT, PENGUUSDT, JELLYJELLYUSDT...`
+- **Minggu 33:** `UNIUSDT, PAXGUSDT, FARTCOINUSDT, PENGUUSDT, CRVUSDT...`
+- **Minggu 34:** `UNIUSDT, ARBUSDT, PAXGUSDT, PENGUUSDT, JELLYJELLYUSDT...`
+- **Minggu 35:** `UNIUSDT, ARBUSDT, PAXGUSDT, PENGUUSDT, CRVUSDT...`
+- **Minggu 36:** `UNIUSDT, ARBUSDT, FARTCOINUSDT, PENGUUSDT, JELLYJELLYUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $31.13 | 28 | 53.57% |
+| `MomentumCrossHunter` | 0.2 | $12.93 | 26 | 69.23% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $119.06                     |
+| **Net Profit**    | **$44.06 (+58.74%)** |
+| Total Trades      | 54                         |
+| Win Rate          | 61.11%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 54 trades (61.11%)             |
+| Profit Factor     | 1.92                       |
+| Max Drawdown      | 15.93%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 17 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:26:30
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-15 (~4 Bulan 14 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `ETCUSDT, ARBUSDT, AAVEUSDT, OMUSDT, FILUSDT...`
+- **Minggu 33:** `ETCUSDT, ARBUSDT, AAVEUSDT, OMUSDT, ENAUSDT...`
+- **Minggu 34:** `ETCUSDT, ARBUSDT, AAVEUSDT, FILUSDT, TAOUSDT...`
+- **Minggu 35:** `ARBUSDT, OMUSDT, ORDIUSDT, ENAUSDT, PENGUUSDT...`
+- **Minggu 36:** `ETCUSDT, ARBUSDT, OMUSDT, FILUSDT, ORDIUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $51.25 | 30 | 63.33% |
+| `MomentumCrossHunter` | 0.2 | $-9.11 | 56 | 46.43% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $117.15                     |
+| **Net Profit**    | **$42.15 (+56.19%)** |
+| Total Trades      | 86                         |
+| Win Rate          | 52.33%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 86 trades (52.33%)             |
+| Profit Factor     | 1.51                       |
+| Max Drawdown      | 14.79%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 5 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:23:26
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `ARBUSDT, FARTCOINUSDT, AAVEUSDT, ORDIUSDT, WLDUSDT...`
+- **Minggu 33:** `ARBUSDT, FARTCOINUSDT, AAVEUSDT, NEARUSDT, WLDUSDT...`
+- **Minggu 34:** `ARBUSDT, AAVEUSDT, ORDIUSDT, NEARUSDT, WLDUSDT...`
+- **Minggu 35:** `ARBUSDT, ORDIUSDT, WLDUSDT, UNIUSDT, XPLUSDT...`
+- **Minggu 36:** `ARBUSDT, FARTCOINUSDT, ORDIUSDT, WLDUSDT, NEARUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $52.08 | 34 | 58.82% |
+| `MomentumCrossHunter` | 0.2 | $5.45 | 67 | 53.73% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $132.53                     |
+| **Net Profit**    | **$57.53 (+76.71%)** |
+| Total Trades      | 101                         |
+| Win Rate          | 55.45%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 101 trades (55.45%)             |
+| Profit Factor     | 1.63                       |
+| Max Drawdown      | 12.16%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 4 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:21:09
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `FARTCOINUSDT, WLDUSDT, ENAUSDT, FORMUSDT, ARBUSDT...`
+- **Minggu 33:** `FARTCOINUSDT, WLDUSDT, ENAUSDT, FORMUSDT, ARBUSDT...`
+- **Minggu 34:** `WLDUSDT, ENAUSDT, FORMUSDT, ARBUSDT, PIPPINUSDT...`
+- **Minggu 35:** `WLDUSDT, ENAUSDT, FORMUSDT, ARBUSDT, XPLUSDT...`
+- **Minggu 36:** `FARTCOINUSDT, WLDUSDT, ENAUSDT, ARBUSDT, XPLUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $51.09 | 33 | 60.61% |
+| `MomentumCrossHunter` | 0.2 | $10.76 | 81 | 51.85% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $136.86                     |
+| **Net Profit**    | **$61.86 (+82.47%)** |
+| Total Trades      | 114                         |
+| Win Rate          | 54.39%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 114 trades (54.39%)             |
+| Profit Factor     | 1.60                       |
+| Max Drawdown      | 15.43%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 4 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:18:29
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `ARBUSDT, ORDIUSDT, JELLYJELLYUSDT, PENGUUSDT, ETCUSDT...`
+- **Minggu 33:** `LTCUSDT, DOTUSDT, HYPEUSDT, CRVUSDT, ETCUSDT...`
+- **Minggu 34:** `LTCUSDT, ORDIUSDT, ARBUSDT, HYPEUSDT, JELLYJELLYUSDT...`
+- **Minggu 35:** `LTCUSDT, ORDIUSDT, ARBUSDT, DOTUSDT, HYPEUSDT...`
+- **Minggu 36:** `LTCUSDT, ARBUSDT, ORDIUSDT, HYPEUSDT, JELLYJELLYUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $25.09 | 38 | 50.00% |
+| `MomentumCrossHunter` | 0.2 | $3.46 | 66 | 54.55% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $103.55                     |
+| **Net Profit**    | **$28.55 (+38.07%)** |
+| Total Trades      | 104                         |
+| Win Rate          | 52.88%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 104 trades (52.88%)             |
+| Profit Factor     | 1.27                       |
+| Max Drawdown      | 15.35%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 2 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:10:36
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-17 (~4 Bulan 16 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `WLDUSDT, FORMUSDT, WIFUSDT, FILUSDT, FHEUSDT...`
+- **Minggu 33:** `WLDUSDT, FORMUSDT, WIFUSDT, BCHUSDT, CRVUSDT...`
+- **Minggu 34:** `WLDUSDT, FORMUSDT, FILUSDT, BCHUSDT, ETCUSDT...`
+- **Minggu 35:** `WLDUSDT, FORMUSDT, FHEUSDT, BCHUSDT, CRVUSDT...`
+- **Minggu 36:** `WLDUSDT, WIFUSDT, FHEUSDT, BCHUSDT, LUNA2USDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $36.24 | 39 | 51.28% |
+| `MomentumCrossHunter` | 0.2 | $-0.26 | 69 | 50.72% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $110.98                     |
+| **Net Profit**    | **$35.98 (+47.97%)** |
+| Total Trades      | 108                         |
+| Win Rate          | 50.93%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 108 trades (50.93%)             |
+| Profit Factor     | 1.35                       |
+| Max Drawdown      | 16.45%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 2 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:06:59
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-17 (~4 Bulan 16 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `WIFUSDT, ARBUSDT, JELLYJELLYUSDT, ORDIUSDT, FHEUSDT...`
+- **Minggu 33:** `BCHUSDT, WIFUSDT, FORMUSDT, ETCUSDT, CRVUSDT...`
+- **Minggu 34:** `BCHUSDT, ARBUSDT, ORDIUSDT, JELLYJELLYUSDT, FORMUSDT...`
+- **Minggu 35:** `BCHUSDT, ARBUSDT, JELLYJELLYUSDT, ORDIUSDT, FHEUSDT...`
+- **Minggu 36:** `BCHUSDT, WIFUSDT, ARBUSDT, JELLYJELLYUSDT, ORDIUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $44.74 | 38 | 52.63% |
+| `MomentumCrossHunter` | 0.2 | $3.20 | 68 | 54.41% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $122.93                     |
+| **Net Profit**    | **$47.93 (+63.91%)** |
+| Total Trades      | 106                         |
+| Win Rate          | 53.77%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 106 trades (53.77%)             |
+| Profit Factor     | 1.49                       |
+| Max Drawdown      | 20.40%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 2 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:05:55
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `SUIUSDT, 1000PEPEUSDT, FARTCOINUSDT, ORDIUSDT, LUNA2USDT...`
+- **Minggu 33:** `PAXGUSDT, SUIUSDT, 1000PEPEUSDT, FARTCOINUSDT, CRVUSDT...`
+- **Minggu 34:** `PAXGUSDT, SUIUSDT, 1000PEPEUSDT, ORDIUSDT, BCHUSDT...`
+- **Minggu 35:** `PAXGUSDT, ORDIUSDT, CRVUSDT, LUNA2USDT, BCHUSDT...`
+- **Minggu 36:** `1000PEPEUSDT, FARTCOINUSDT, ORDIUSDT, LUNA2USDT, BCHUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $17.68 | 30 | 50.00% |
+| `MomentumCrossHunter` | 0.2 | $-1.08 | 60 | 56.67% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $91.60                     |
+| **Net Profit**    | **$16.60 (+22.13%)** |
+| Total Trades      | 90                         |
+| Win Rate          | 54.44%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 90 trades (54.44%)             |
+| Profit Factor     | 1.19                       |
+| Max Drawdown      | 21.24%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 8 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:03:56
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-17 (~4 Bulan 16 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `1000PEPEUSDT, ARBUSDT, FORMUSDT, NEARUSDT, PIPPINUSDT...`
+- **Minggu 33:** `1000PEPEUSDT, FORMUSDT, NEARUSDT, LTCUSDT, PAXGUSDT...`
+- **Minggu 34:** `1000PEPEUSDT, ARBUSDT, FORMUSDT, NEARUSDT, LTCUSDT...`
+- **Minggu 35:** `ARBUSDT, FORMUSDT, LTCUSDT, PAXGUSDT, PIPPINUSDT...`
+- **Minggu 36:** `1000PEPEUSDT, ARBUSDT, NEARUSDT, LTCUSDT, PIPPINUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $31.05 | 29 | 51.72% |
+| `MomentumCrossHunter` | 0.2 | $-4.81 | 63 | 47.62% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $101.25                     |
+| **Net Profit**    | **$26.25 (+35.00%)** |
+| Total Trades      | 92                         |
+| Win Rate          | 48.91%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 92 trades (48.91%)             |
+| Profit Factor     | 1.31                       |
+| Max Drawdown      | 12.74%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 9 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 18:01:07
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `ETCUSDT, PENGUUSDT, ARBUSDT, ORDIUSDT, PIPPINUSDT...`
+- **Minggu 33:** `BCHUSDT, LTCUSDT, ETCUSDT, PENGUUSDT, PAXGUSDT...`
+- **Minggu 34:** `BCHUSDT, LTCUSDT, ETCUSDT, PENGUUSDT, ARBUSDT...`
+- **Minggu 35:** `BCHUSDT, LTCUSDT, PENGUUSDT, ARBUSDT, PAXGUSDT...`
+- **Minggu 36:** `BCHUSDT, LTCUSDT, ETCUSDT, PENGUUSDT, ARBUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $18.88 | 31 | 51.61% |
+| `MomentumCrossHunter` | 0.2 | $-4.83 | 55 | 56.36% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $89.05                     |
+| **Net Profit**    | **$14.05 (+18.74%)** |
+| Total Trades      | 86                         |
+| Win Rate          | 54.65%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 86 trades (54.65%)             |
+| Profit Factor     | 1.16                       |
+| Max Drawdown      | 24.54%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 8 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:59:12
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `1000PEPEUSDT, OMUSDT, PIPPINUSDT, SUIUSDT, ORDIUSDT...`
+- **Minggu 33:** `1000PEPEUSDT, PIPPINUSDT, OMUSDT, SUIUSDT, CRVUSDT...`
+- **Minggu 34:** `1000PEPEUSDT, PIPPINUSDT, SUIUSDT, ORDIUSDT, HYPEUSDT...`
+- **Minggu 35:** `XPLUSDT, PIPPINUSDT, OMUSDT, ORDIUSDT, CRVUSDT...`
+- **Minggu 36:** `1000PEPEUSDT, XPLUSDT, PIPPINUSDT, OMUSDT, ORDIUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $29.02 | 39 | 51.28% |
+| `MomentumCrossHunter` | 0.2 | $16.63 | 87 | 55.17% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $120.65                     |
+| **Net Profit**    | **$45.65 (+60.86%)** |
+| Total Trades      | 126                         |
+| Win Rate          | 53.97%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 126 trades (53.97%)             |
+| Profit Factor     | 1.35                       |
+| Max Drawdown      | 15.56%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 0 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:57:39
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-17 (~4 Bulan 16 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `NEARUSDT, WIFUSDT, FHEUSDT, PENGUUSDT, FARTCOINUSDT...`
+- **Minggu 33:** `NEARUSDT, WIFUSDT, DOTUSDT, PENGUUSDT, FARTCOINUSDT...`
+- **Minggu 34:** `NEARUSDT, PENGUUSDT, WLDUSDT, HYPEUSDT, UNIUSDT...`
+- **Minggu 35:** `FHEUSDT, PENGUUSDT, DOTUSDT, WLDUSDT, XPLUSDT...`
+- **Minggu 36:** `NEARUSDT, WIFUSDT, FHEUSDT, PENGUUSDT, FARTCOINUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $43.29 | 35 | 54.29% |
+| `MomentumCrossHunter` | 0.2 | $7.10 | 80 | 52.50% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $125.39                     |
+| **Net Profit**    | **$50.39 (+67.18%)** |
+| Total Trades      | 115                         |
+| Win Rate          | 53.04%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 115 trades (53.04%)             |
+| Profit Factor     | 1.44                       |
+| Max Drawdown      | 15.07%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 4 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:54:06
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-17 (~4 Bulan 16 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `ETCUSDT, ENAUSDT, FILUSDT, SUIUSDT, LUNA2USDT...`
+- **Minggu 33:** `ETCUSDT, ENAUSDT, BCHUSDT, HYPEUSDT, SUIUSDT...`
+- **Minggu 34:** `ETCUSDT, ENAUSDT, BCHUSDT, FILUSDT, HYPEUSDT...`
+- **Minggu 35:** `ENAUSDT, BCHUSDT, HYPEUSDT, LUNA2USDT, PUMPUSDT...`
+- **Minggu 36:** `ENAUSDT, ETCUSDT, BCHUSDT, HYPEUSDT, LUNA2USDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $29.87 | 34 | 50.00% |
+| `MomentumCrossHunter` | 0.2 | $5.62 | 59 | 50.85% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $110.49                     |
+| **Net Profit**    | **$35.49 (+47.32%)** |
+| Total Trades      | 93                         |
+| Win Rate          | 50.54%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 93 trades (50.54%)             |
+| Profit Factor     | 1.41                       |
+| Max Drawdown      | 23.00%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 8 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:51:42
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-17 (~4 Bulan 16 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `OMUSDT, NEARUSDT, PENGUUSDT, WLDUSDT, ETCUSDT...`
+- **Minggu 33:** `LTCUSDT, OMUSDT, NEARUSDT, DOTUSDT, PENGUUSDT...`
+- **Minggu 34:** `LTCUSDT, NEARUSDT, PENGUUSDT, WLDUSDT, ETCUSDT...`
+- **Minggu 35:** `LTCUSDT, OMUSDT, DOTUSDT, PENGUUSDT, WLDUSDT...`
+- **Minggu 36:** `LTCUSDT, OMUSDT, NEARUSDT, PENGUUSDT, WLDUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $20.04 | 33 | 48.48% |
+| `MomentumCrossHunter` | 0.2 | $-6.45 | 55 | 49.09% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $88.59                     |
+| **Net Profit**    | **$13.59 (+18.12%)** |
+| Total Trades      | 88                         |
+| Win Rate          | 48.86%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 88 trades (48.86%)             |
+| Profit Factor     | 1.18                       |
+| Max Drawdown      | 20.15%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 11 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:47:19
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `JELLYJELLYUSDT, WIFUSDT, ENAUSDT, PENGUUSDT, FHEUSDT...`
+- **Minggu 33:** `DOTUSDT, WIFUSDT, BCHUSDT, ENAUSDT, PENGUUSDT...`
+- **Minggu 34:** `JELLYJELLYUSDT, BCHUSDT, ENAUSDT, PENGUUSDT, HYPEUSDT...`
+- **Minggu 35:** `JELLYJELLYUSDT, DOTUSDT, BCHUSDT, ENAUSDT, PENGUUSDT...`
+- **Minggu 36:** `JELLYJELLYUSDT, WIFUSDT, BCHUSDT, ENAUSDT, PENGUUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $19.95 | 26 | 53.85% |
+| `MomentumCrossHunter` | 0.2 | $9.64 | 53 | 52.83% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $104.58                     |
+| **Net Profit**    | **$29.58 (+39.44%)** |
+| Total Trades      | 79                         |
+| Win Rate          | 53.16%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 79 trades (53.16%)             |
+| Profit Factor     | 1.42                       |
+| Max Drawdown      | 11.11%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 15 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:45:26
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `ENAUSDT, FHEUSDT, SUIUSDT, FORMUSDT, FILUSDT...`
+- **Minggu 33:** `ENAUSDT, HYPEUSDT, LTCUSDT, SUIUSDT, FORMUSDT...`
+- **Minggu 34:** `HYPEUSDT, ENAUSDT, LTCUSDT, SUIUSDT, FORMUSDT...`
+- **Minggu 35:** `HYPEUSDT, ENAUSDT, LTCUSDT, FHEUSDT, FORMUSDT...`
+- **Minggu 36:** `ENAUSDT, HYPEUSDT, LTCUSDT, FHEUSDT, FARTCOINUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $69.59 | 41 | 60.98% |
+| `MomentumCrossHunter` | 0.2 | $16.54 | 25 | 64.00% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $161.13                     |
+| **Net Profit**    | **$86.13 (+114.84%)** |
+| Total Trades      | 66                         |
+| Win Rate          | 62.12%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 66 trades (62.12%)             |
+| Profit Factor     | 2.22                       |
+| Max Drawdown      | 16.55%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 0 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:42:45
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `1000SHIBUSDT, ETCUSDT, ORDIUSDT, ARBUSDT, JELLYJELLYUSDT...`
+- **Minggu 33:** `ETCUSDT, 1000SHIBUSDT, BCHUSDT, OMUSDT, LTCUSDT...`
+- **Minggu 34:** `ETCUSDT, 1000SHIBUSDT, BCHUSDT, ORDIUSDT, PUMPUSDT...`
+- **Minggu 35:** `1000SHIBUSDT, BCHUSDT, ORDIUSDT, PUMPUSDT, ARBUSDT...`
+- **Minggu 36:** `1000SHIBUSDT, ETCUSDT, BCHUSDT, ORDIUSDT, ARBUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $62.18 | 39 | 58.97% |
+| `MomentumCrossHunter` | 0.2 | $20.06 | 25 | 68.00% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $157.24                     |
+| **Net Profit**    | **$82.24 (+109.65%)** |
+| Total Trades      | 64                         |
+| Win Rate          | 62.50%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 64 trades (62.50%)             |
+| Profit Factor     | 2.16                       |
+| Max Drawdown      | 22.84%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 0 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:40:35
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=False`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `WLDUSDT, LUNA2USDT, ARBUSDT, ETCUSDT, OMUSDT...`
+- **Minggu 33:** `WLDUSDT, FARTCOINUSDT, ETCUSDT, PAXGUSDT, HYPEUSDT...`
+- **Minggu 34:** `WLDUSDT, ARBUSDT, ETCUSDT, PAXGUSDT, HYPEUSDT...`
+- **Minggu 35:** `WLDUSDT, LUNA2USDT, ARBUSDT, CRVUSDT, PAXGUSDT...`
+- **Minggu 36:** `WLDUSDT, LUNA2USDT, ARBUSDT, FARTCOINUSDT, ETCUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $56.37 | 40 | 57.50% |
+| `MomentumCrossHunter` | 0.2 | $11.53 | 23 | 65.22% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $142.90                     |
+| **Net Profit**    | **$67.90 (+90.54%)** |
+| Total Trades      | 63                         |
+| Win Rate          | 60.32%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 63 trades (60.32%)             |
+| Profit Factor     | 2.00                       |
+| Max Drawdown      | 21.06%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 0 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:38:15
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=True`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `FHEUSDT, FORMUSDT, ENAUSDT, WLDUSDT, 1000SHIBUSDT...`
+- **Minggu 33:** `FORMUSDT, ENAUSDT, WLDUSDT, 1000SHIBUSDT, PAXGUSDT...`
+- **Minggu 34:** `PUMPUSDT, FORMUSDT, ENAUSDT, WLDUSDT, 1000SHIBUSDT...`
+- **Minggu 35:** `FHEUSDT, PUMPUSDT, FORMUSDT, ENAUSDT, WLDUSDT...`
+- **Minggu 36:** `FHEUSDT, ENAUSDT, WLDUSDT, 1000SHIBUSDT, JELLYJELLYUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $50.44 | 36 | 58.33% |
+| `MomentumCrossHunter` | 0.2 | $20.41 | 23 | 69.57% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $145.85                     |
+| **Net Profit**    | **$70.85 (+94.47%)** |
+| Total Trades      | 59                         |
+| Win Rate          | 62.71%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 59 trades (62.71%)             |
+| Profit Factor     | 2.10                       |
+| Max Drawdown      | 24.44%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 3 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:36:23
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=True`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `ARBUSDT, AAVEUSDT, SUIUSDT, PENGUUSDT, NEARUSDT...`
+- **Minggu 33:** `AAVEUSDT, SUIUSDT, PENGUUSDT, NEARUSDT, BCHUSDT...`
+- **Minggu 34:** `ARBUSDT, AAVEUSDT, SUIUSDT, NEARUSDT, BCHUSDT...`
+- **Minggu 35:** `ARBUSDT, PENGUUSDT, LUNA2USDT, BCHUSDT, CRVUSDT...`
+- **Minggu 36:** `ARBUSDT, PENGUUSDT, NEARUSDT, LUNA2USDT, BCHUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $38.68 | 34 | 55.88% |
+| `MomentumCrossHunter` | 0.2 | $17.96 | 18 | 77.78% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $131.64                     |
+| **Net Profit**    | **$56.64 (+75.52%)** |
+| Total Trades      | 52                         |
+| Win Rate          | 63.46%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 52 trades (63.46%)             |
+| Profit Factor     | 1.98                       |
+| Max Drawdown      | 21.94%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 3 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:35:15
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=True`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `SUIUSDT, 1000SHIBUSDT, LUNA2USDT, PIPPINUSDT, 1000PEPEUSDT...`
+- **Minggu 33:** `SUIUSDT, 1000SHIBUSDT, BCHUSDT, HYPEUSDT, FARTCOINUSDT...`
+- **Minggu 34:** `SUIUSDT, 1000SHIBUSDT, BCHUSDT, HYPEUSDT, PIPPINUSDT...`
+- **Minggu 35:** `CRVUSDT, 1000SHIBUSDT, BCHUSDT, HYPEUSDT, LUNA2USDT...`
+- **Minggu 36:** `1000SHIBUSDT, BCHUSDT, HYPEUSDT, FARTCOINUSDT, LUNA2USDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $49.76 | 34 | 58.82% |
+| `MomentumCrossHunter` | 0.2 | $20.12 | 23 | 69.57% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $144.88                     |
+| **Net Profit**    | **$69.88 (+93.18%)** |
+| Total Trades      | 57                         |
+| Win Rate          | 63.16%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 57 trades (63.16%)             |
+| Profit Factor     | 2.08                       |
+| Max Drawdown      | 23.46%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 3 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:33:27
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=True`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `ARBUSDT, PENGUUSDT, FHEUSDT, JELLYJELLYUSDT, SUIUSDT...`
+- **Minggu 33:** `PENGUUSDT, SUIUSDT, FARTCOINUSDT, HYPEUSDT, LTCUSDT...`
+- **Minggu 34:** `ARBUSDT, JELLYJELLYUSDT, SUIUSDT, HYPEUSDT, LTCUSDT...`
+- **Minggu 35:** `ARBUSDT, PENGUUSDT, FHEUSDT, JELLYJELLYUSDT, HYPEUSDT...`
+- **Minggu 36:** `ARBUSDT, PENGUUSDT, FHEUSDT, JELLYJELLYUSDT, FARTCOINUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $5.60 | 19 | 47.37% |
+| `MomentumCrossHunter` | 0.2 | $-6.76 | 10 | 60.00% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $73.84                     |
+| **Net Profit**    | **$-1.16 (-1.54%)** |
+| Total Trades      | 29                         |
+| Win Rate          | 51.72%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 29 trades (51.72%)             |
+| Profit Factor     | 0.96                       |
+| Max Drawdown      | 28.86%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 21 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:32:10
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=True`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `ORDIUSDT, 1000PEPEUSDT, PIPPINUSDT, ENAUSDT, ETCUSDT...`
+- **Minggu 33:** `LTCUSDT, 1000PEPEUSDT, PIPPINUSDT, ENAUSDT, ETCUSDT...`
+- **Minggu 34:** `LTCUSDT, PUMPUSDT, ORDIUSDT, 1000PEPEUSDT, PIPPINUSDT...`
+- **Minggu 35:** `LTCUSDT, PUMPUSDT, CRVUSDT, ORDIUSDT, PIPPINUSDT...`
+- **Minggu 36:** `LTCUSDT, ORDIUSDT, 1000PEPEUSDT, PIPPINUSDT, ENAUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $18.01 | 37 | 48.65% |
+| `MomentumCrossHunter` | 0.2 | $5.19 | 12 | 83.33% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $98.20                     |
+| **Net Profit**    | **$23.20 (+30.94%)** |
+| Total Trades      | 49                         |
+| Win Rate          | 57.14%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 49 trades (57.14%)             |
+| Profit Factor     | 1.49                       |
+| Max Drawdown      | 28.27%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 6 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:31:20
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=True`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `UNIUSDT, ETCUSDT, FILUSDT, WIFUSDT, ENAUSDT...`
+- **Minggu 33:** `UNIUSDT, FARTCOINUSDT, BCHUSDT, ETCUSDT, DOTUSDT...`
+- **Minggu 34:** `UNIUSDT, BCHUSDT, ETCUSDT, PUMPUSDT, FILUSDT...`
+- **Minggu 35:** `UNIUSDT, BCHUSDT, DOTUSDT, PUMPUSDT, ENAUSDT...`
+- **Minggu 36:** `UNIUSDT, FARTCOINUSDT, BCHUSDT, XPLUSDT, ETCUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $11.17 | 35 | 45.71% |
+| `MomentumCrossHunter` | 0.2 | $-0.95 | 12 | 75.00% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $85.21                     |
+| **Net Profit**    | **$10.21 (+13.62%)** |
+| Total Trades      | 47                         |
+| Win Rate          | 53.19%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 47 trades (53.19%)             |
+| Profit Factor     | 1.22                       |
+| Max Drawdown      | 30.51%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 6 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:29:54
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=True`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `JELLYJELLYUSDT, PIPPINUSDT, 1000SHIBUSDT, FORMUSDT, LUNA2USDT...`
+- **Minggu 33:** `1000SHIBUSDT, PIPPINUSDT, FORMUSDT, NEARUSDT, WIFUSDT...`
+- **Minggu 34:** `JELLYJELLYUSDT, 1000SHIBUSDT, PIPPINUSDT, FORMUSDT, NEARUSDT...`
+- **Minggu 35:** `JELLYJELLYUSDT, PIPPINUSDT, 1000SHIBUSDT, FORMUSDT, LUNA2USDT...`
+- **Minggu 36:** `JELLYJELLYUSDT, PIPPINUSDT, 1000SHIBUSDT, LUNA2USDT, NEARUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $54.67 | 37 | 59.46% |
+| `MomentumCrossHunter` | 0.2 | $6.88 | 20 | 65.00% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $136.56                     |
+| **Net Profit**    | **$61.56 (+82.08%)** |
+| Total Trades      | 57                         |
+| Win Rate          | 61.40%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 57 trades (61.40%)             |
+| Profit Factor     | 1.93                       |
+| Max Drawdown      | 22.94%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 3 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:26:36
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=True`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `JELLYJELLYUSDT, 1000SHIBUSDT, FILUSDT, PIPPINUSDT, AAVEUSDT...`
+- **Minggu 33:** `PAXGUSDT, 1000SHIBUSDT, HYPEUSDT, LTCUSDT, PIPPINUSDT...`
+- **Minggu 34:** `JELLYJELLYUSDT, PAXGUSDT, 1000SHIBUSDT, HYPEUSDT, LTCUSDT...`
+- **Minggu 35:** `JELLYJELLYUSDT, PAXGUSDT, 1000SHIBUSDT, HYPEUSDT, LTCUSDT...`
+- **Minggu 36:** `JELLYJELLYUSDT, 1000SHIBUSDT, HYPEUSDT, LTCUSDT, PIPPINUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $49.11 | 36 | 58.33% |
+| `MomentumCrossHunter` | 0.2 | $16.69 | 25 | 64.00% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $140.80                     |
+| **Net Profit**    | **$65.80 (+87.74%)** |
+| Total Trades      | 61                         |
+| Win Rate          | 60.66%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 61 trades (60.66%)             |
+| Profit Factor     | 1.95                       |
+| Max Drawdown      | 26.40%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 3 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 17:17:31
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-04 s/d 2025-12-16 (~4 Bulan 15 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.8`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `extreme_test_mode=False`, `use_htf_filter=False`, `min_adx_level=19`, `use_di_filter=True`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `SUIUSDT, JELLYJELLYUSDT, ETCUSDT, ENAUSDT, UNIUSDT...`
+- **Minggu 33:** `SUIUSDT, LTCUSDT, HYPEUSDT, ETCUSDT, ENAUSDT...`
+- **Minggu 34:** `SUIUSDT, JELLYJELLYUSDT, LTCUSDT, HYPEUSDT, ETCUSDT...`
+- **Minggu 35:** `JELLYJELLYUSDT, LTCUSDT, HYPEUSDT, ENAUSDT, UNIUSDT...`
+- **Minggu 36:** `JELLYJELLYUSDT, LTCUSDT, HYPEUSDT, ETCUSDT, ENAUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $27.45 | 34 | 55.88% |
+| `MomentumCrossHunter` | 0.2 | $-3.45 | 13 | 53.85% |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $99.00                     |
+| **Net Profit**    | **$24.00 (+32.00%)** |
+| Total Trades      | 47                         |
+| Win Rate          | 55.32%                     |
+|  - Long Win Rate  | 0 trades (0.00%)              |
+|  - Short Win Rate | 47 trades (55.32%)             |
+| Profit Factor     | 1.49                       |
+| Max Drawdown      | 32.64%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 10 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
 ## Backtest: 2025-12-17 17:04:54
 
 **Parameter:**
