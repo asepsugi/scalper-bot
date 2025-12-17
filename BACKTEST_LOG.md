@@ -1,6 +1,106 @@
 
 ---
 
+## Backtest: 2025-12-17 12:20:14
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-18 s/d 2025-12-16 (~4 Bulan 1 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.5`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `use_htf_filter=True`, `min_adx_level=20`, `use_di_filter=True`, `use_volatility_or_logic=True`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `WIFUSDT, PIPPINUSDT, LUNA2USDT, AAVEUSDT, TRUMPUSDT...`
+- **Minggu 33:** `PIPPINUSDT, HYPEUSDT, AAVEUSDT, SUIUSDT, OMUSDT...`
+- **Minggu 34:** `PIPPINUSDT, HYPEUSDT, AAVEUSDT, SUIUSDT, WLDUSDT...`
+- **Minggu 35:** `PIPPINUSDT, LUNA2USDT, HYPEUSDT, TRUMPUSDT, OMUSDT...`
+- **Minggu 36:** `WIFUSDT, PIPPINUSDT, LUNA2USDT, HYPEUSDT, TRUMPUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $4.33 | 36 | 41.67% |
+| `MomentumCrossHunter` | 0.2 | $0.00 | 0 | N/A |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $79.33                     |
+| **Net Profit**    | **$4.33 (+5.78%)** |
+| Total Trades      | 36                         |
+| Win Rate          | 41.67%                     |
+|  - Long Win Rate  | 3 trades (0.00%)              |
+|  - Short Win Rate | 33 trades (45.45%)             |
+| Profit Factor     | 1.10                       |
+| Max Drawdown      | 16.57%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 10 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
+## Backtest: 2025-12-17 12:13:11
+
+**Parameter:**
+-   **Simbol:** Top 50 (berdasarkan volume)
+-   **Candles:** 1500
+-   **Periode:** 2025-08-18 s/d 2025-12-16 (~4 Bulan 1 Hari)
+-   **Mode Exit:** Dinamis (Advanced)
+
+**Parameter Filter Aktif:**
+- **`AltcoinVolumeBreakoutHunter`:** `risk_per_trade=0.025`, `breakout_window=12`, `volume_spike_multiplier=3.5`, `candle_body_ratio=0.58`, `anti_chase_pct=0.08`
+- **`MomentumCrossHunter`:** `risk_per_trade=0.012`, `use_htf_filter=True`, `min_adx_level=23`, `use_di_filter=True`, `bbw_is_expanding_window=5`
+
+**Contoh Rotasi Whitelist Mingguan:**
+
+- **Minggu 32:** `JELLYJELLYUSDT, AAVEUSDT, ETCUSDT, SUIUSDT, WIFUSDT...`
+- **Minggu 33:** `DOTUSDT, AAVEUSDT, BCHUSDT, ETCUSDT, SUIUSDT...`
+- **Minggu 34:** `JELLYJELLYUSDT, AAVEUSDT, BCHUSDT, ETCUSDT, SUIUSDT...`
+- **Minggu 35:** `CRVUSDT, JELLYJELLYUSDT, DOTUSDT, BCHUSDT, PUMPUSDT...`
+- **Minggu 36:** `JELLYJELLYUSDT, BCHUSDT, SOMIUSDT, ETCUSDT, WIFUSDT...`
+- ... (dan seterusnya)
+
+**Konfigurasi & Performa Strategi:**
+
+| Nama Strategi                | Bobot | Total PnL (USD) | Trades | Win Rate |
+| ---------------------------- | ----- | --------------- | ------ | -------- |
+| `AltcoinVolumeBreakoutHunter` | 0.6 | $4.33 | 36 | 41.67% |
+| `MomentumCrossHunter` | 0.2 | $0.00 | 0 | N/A |
+
+**Hasil Ringkas:**
+
+| Metrik            | Nilai                      |
+| ----------------- | -------------------------- |
+| Saldo Awal        | $75.00                     |
+| Saldo Akhir       | $79.33                     |
+| **Net Profit**    | **$4.33 (+5.78%)** |
+| Total Trades      | 36                         |
+| Win Rate          | 41.67%                     |
+|  - Long Win Rate  | 3 trades (0.00%)              |
+|  - Short Win Rate | 33 trades (45.45%)             |
+| Profit Factor     | 1.10                       |
+| Max Drawdown      | 16.57%                      |
+| CB Triggers       | 1                         |
+| Weekly Killswitch | 10 Triggers                     |
+
+**Catatan & Observasi:**
+-   (Isi observasi Anda di sini)
+
+
+---
+
 ## Backtest: 2025-12-17 11:52:26
 
 **Parameter:**

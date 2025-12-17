@@ -767,26 +767,34 @@ def signal_version_MomentumCrossHunter(df, symbol: str = None):
     - Tujuan: Menangkap momentum yang kuat saat terjadi persilangan MA jangka pendek dan menengah.
     - Logic: Menunggu Golden Cross (7/25/99) atau Death Cross (7/25/99) dengan konfirmasi dari RSI dan MACD.
     """
-    # --- PERBAIKAN: Baca parameter dari blok config khusus ---
+    # --- PERBAIKAN TOTAL: Baca parameter dari blok config yang sudah dirombak ---
     params = CONFIG.get("strategy_params", {}).get("MomentumCrossHunter", {})
+
+    # --- PERBAIKAN: Filter blacklist simbol ---
+    if symbol and symbol in params.get("symbol_blacklist", []):
+        return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
 
     # --- Indikator & Kolom yang Dibutuhkan ---
     rsi_col = f"RSI_{CONFIG['rsi_period']}"
     adx_col = f"ADX_{CONFIG['atr_period']}"
-    # --- PERBAIKAN: Tambahkan kolom yang dibutuhkan untuk filter baru ---
+    dmp_col = f"DMP_{CONFIG['atr_period']}"
+    dmn_col = f"DMN_{CONFIG['atr_period']}"
+
     required_cols = [
         'EMA_7', 'EMA_25', 'EMA_99', rsi_col,
         'MACD_12_26_9', 'MACDs_12_26_9',
-        # Kolom untuk filter baru
-        adx_col, 'bb_width_pct'
+        # Kolom untuk filter baru yang lebih ketat
+        adx_col, dmp_col, dmn_col, 'bb_width_pct', 'EMA_200_1h'
     ]
 
     # Validasi data
     if any(col not in df.columns for col in required_cols):
         return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
 
-    # --- FINE-TUNING: Ambil data untuk filter baru ---
-    adx = df.get(adx_col)
+    # --- Ambil data untuk filter ---
+    adx = df[adx_col]
+    dmp = df[dmp_col]
+    dmn = df[dmn_col]
 
     # --- Parameter ---
     ema7 = df['EMA_7']
@@ -817,35 +825,58 @@ def signal_version_MomentumCrossHunter(df, symbol: str = None):
     macd_confirm_long = df['MACD_12_26_9'] > df['MACDs_12_26_9']
     macd_confirm_short = df['MACD_12_26_9'] < df['MACDs_12_26_9']
 
-    # --- PERBAIKAN: Filter Kualitas Sinyal yang Lebih Cerdas ---
+    # --- PERBAIKAN TOTAL: Filter Kualitas Sinyal Sesuai Analisis ---
 
-    # Filter 1: Momentum Sedang Dibangun (ADX Rising)
-    # Kita tidak butuh ADX tinggi, tapi ADX yang sedang naik.
-    if params.get("adx_is_rising", True):
-        momentum_building = adx > adx.shift(2) # ADX saat ini > ADX 2 candle lalu
+    # Filter 1: Higher Timeframe Trend Alignment
+    if params.get("use_htf_filter", True):
+        long_htf_ok = df['close'] > df['EMA_200_1h']
+        short_htf_ok = df['close'] < df['EMA_200_1h']
     else:
-        momentum_building = pd.Series(True, index=df.index)
+        long_htf_ok = short_htf_ok = pd.Series(True, index=df.index)
 
-    # Filter 2: Volatilitas Mulai Ekspansi (Bollinger Bands Width)
-    # Sinyal valid jika volatilitas keluar dari zona 'squeeze' tapi belum terlalu liar.
-    bbw_pct = df.get('bb_width_pct', pd.Series(0.5, index=df.index))
-    volatility_expanding = (bbw_pct > params.get("bbw_percentile_min", 0.10)) & \
-                           (bbw_pct < params.get("bbw_percentile_max", 0.60))
+    # Filter 2: Minimum Trend Strength (ADX Level)
+    trend_is_strong_enough = adx > params.get("min_adx_level", 23)
+
+    # Filter 3: Directional Bias (DI Cross)
+    if params.get("use_di_filter", True):
+        long_di_ok = dmp > dmn
+        short_di_ok = dmn > dmp
+    else:
+        long_di_ok = short_di_ok = pd.Series(True, index=df.index)
+
+    # Filter 4 & 5: Volatility Expansion (BBW Expanding & above min percentile)
+    # --- PERBAIKAN: Terapkan logika OR yang dapat dikonfigurasi ---
+    bbw_pct = df['bb_width_pct']
+    bbw_expanding_window = params.get("bbw_is_expanding_window", 3)
+    
+    # Kondisi 4: Volatilitas sedang berekspansi
+    is_expanding = bbw_pct > bbw_pct.shift(bbw_expanding_window)
+    # Kondisi 5: Volatilitas sudah berada di level yang sehat (bukan squeeze)
+    is_above_min_vol = bbw_pct > params.get("bbw_min_percentile", 0.30)
+
+    if params.get("use_volatility_or_logic", True):
+        volatility_ok = is_expanding | is_above_min_vol # Logika OR: Cukup salah satu terpenuhi
+    else:
+        volatility_ok = is_expanding & is_above_min_vol # Logika AND: Keduanya harus terpenuhi
 
     # --- Gabungkan Sinyal ---
-    # Logika dasar + konfirmasi momentum + filter kualitas baru
-    long_signal = cross_up_event & above_long_term_trend & rsi_confirm_long & macd_confirm_long & momentum_building & volatility_expanding
-    short_signal = cross_down_event & below_long_term_trend & rsi_confirm_short & macd_confirm_short & momentum_building & volatility_expanding
+    # Logika dasar + konfirmasi momentum + SEMUA filter kualitas baru
+    long_signal = (cross_up_event & above_long_term_trend & rsi_confirm_long & macd_confirm_long &
+                   long_htf_ok & trend_is_strong_enough & long_di_ok & volatility_ok)
+    short_signal = (cross_down_event & below_long_term_trend & rsi_confirm_short & macd_confirm_short &
+                    short_htf_ok & trend_is_strong_enough & short_di_ok & volatility_ok)
 
     # --- Exit Parameters ---
-    # Menggunakan parameter yang seimbang, cocok untuk strategi tren.
+    # Menggunakan parameter yang sudah dioptimalkan sesuai analisis.
     exit_params = {
-        'sl_multiplier': params.get("sl_multiplier", 1.9),
-        'rr_ratio': params.get("rr_ratio", 2.1),
+        'sl_multiplier': params.get("sl_multiplier", 2.8),
+        'rr_ratio': params.get("rr_ratio", 2.5),
+        'use_breakeven_stop': params.get("use_breakeven_stop", True),
+        'breakeven_trigger_rr': params.get("breakeven_trigger_rr", 1.0),
         'trailing': {
             "enabled": True,
-            "trigger_rr": params.get("trailing_trigger_rr", 1.5),
-            "distance_atr": params.get("trailing_distance_atr", 1.8),
+            "trigger_rr": params.get("trailing_trigger_rr", 1.2),
+            "distance_atr": params.get("trailing_distance_atr", 2.0),
         }
     }
 
@@ -880,7 +911,7 @@ STRATEGY_CONFIG = {
     # },
     "MomentumCrossHunter": {
         "function": signal_version_MomentumCrossHunter,
-        "weight": 0.40 # Bobot standar untuk strategi tren momentum
+        "weight": 0.20 # PERBAIKAN: Bobot diturunkan karena sedang di-tuning ulang
     },
     # "HybridScalper": {
     #     "function": signal_version_HYBRID_SCALPER,

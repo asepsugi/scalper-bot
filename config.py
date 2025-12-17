@@ -139,16 +139,27 @@ CONFIG = {
         },
         "MomentumCrossHunter": {
             "risk_per_trade": 0.012,
-            # Filter 1: ADX harus sedang naik (menunjukkan momentum sedang dibangun)
-            "adx_is_rising": True,
-            # Filter 2: Volatilitas (BBW) harus mulai ekspansi dari level rendah
-            "bbw_percentile_min": 0.10, # BBW harus di atas percentile 10% (keluar dari squeeze)
-            "bbw_percentile_max": 0.60, # BBW harus di bawah percentile 60% (hindari volatilitas ekstrem)
-            # Exit Parameters
-            "sl_multiplier": 1.9,
-            "rr_ratio": 2.1,
-            "trailing_trigger_rr": 1.5,
-            "trailing_distance_atr": 1.8
+            # --- PERBAIKAN: Filter Entry yang Diperketat ---
+            "use_htf_filter": True,          # Filter 1: Gunakan filter tren timeframe 1 jam (EMA 200).
+            "min_adx_level": 20,             # Filter 2: DILONGGARKAN. ADX harus di atas 20 (dari 23).
+            "use_di_filter": True,           # Filter 3: +DI harus > -DI untuk long (dan sebaliknya).
+            # --- PERBAIKAN: Logika Volatilitas yang Lebih Fleksibel ---
+            "use_volatility_or_logic": True, # Jika True, (Filter 4 OR Filter 5). Jika False, (Filter 4 AND Filter 5).
+            "bbw_is_expanding_window": 3,    # Filter 4: BBW harus lebih besar dari nilainya 3 candle lalu.
+            "bbw_min_percentile": 0.30,      # Filter 5: DILONGGARKAN. BBW harus di atas percentile 30% (dari 35%).
+            # --- PERBAIKAN: Manajemen Stop-Loss & Exit ---
+            "sl_multiplier": 2.8,            # SL lebih longgar untuk mengakomodasi volatilitas.
+            "rr_ratio": 2.5,                 # Target RR dinaikkan sedikit.
+            "use_breakeven_stop": True,      # Aktifkan breakeven stop.
+            "breakeven_trigger_rr": 1.0,     # Pindahkan SL ke breakeven setelah mencapai 1R.
+            "trailing_trigger_rr": 1.2,      # Mulai trailing lebih awal.
+            "trailing_distance_atr": 2.0,    # Jarak trailing lebih ketat untuk mengunci profit.
+
+            # --- PERBAIKAN: Adaptasi Aset ---
+            "symbol_blacklist": [
+                "PUMPUSDT", "HYPEUSDT", "PEPEUSDT", "WIFUSDT", "BONKUSDT", 
+                "FLOKIUSDT", "MEMEUSDT", "ORDIUSDT", "1000SATSUSDT", "CRVUSDT"
+            ]
         }
     }, # <-- PERBAIKAN: Tambahkan koma yang hilang di sini
 
