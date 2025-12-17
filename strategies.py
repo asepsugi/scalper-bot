@@ -774,27 +774,8 @@ def signal_version_MomentumCrossHunter(df, symbol: str = None):
     if symbol and symbol in params.get("symbol_blacklist", []):
         return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
 
-    # --- Indikator & Kolom yang Dibutuhkan ---
-    rsi_col = f"RSI_{CONFIG['rsi_period']}"
-    adx_col = f"ADX_{CONFIG['atr_period']}"
-    dmp_col = f"DMP_{CONFIG['atr_period']}"
-    dmn_col = f"DMN_{CONFIG['atr_period']}"
-
-    required_cols = [
-        'EMA_7', 'EMA_25', 'EMA_99', rsi_col,
-        'MACD_12_26_9', 'MACDs_12_26_9',
-        # Kolom untuk filter baru yang lebih ketat
-        adx_col, dmp_col, dmn_col, 'bb_width_pct', 'EMA_200_1h'
-    ]
-
-    # Validasi data
-    if any(col not in df.columns for col in required_cols):
-        return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
-
     # --- Ambil data untuk filter ---
-    adx = df[adx_col]
-    dmp = df[dmp_col]
-    dmn = df[dmn_col]
+    rsi_col = f"RSI_{CONFIG['rsi_period']}"
 
     # --- Parameter ---
     ema7 = df['EMA_7']
@@ -805,66 +786,110 @@ def signal_version_MomentumCrossHunter(df, symbol: str = None):
 
     # 1. Kondisi Golden Cross (Long)
     #    - EMA 7 baru saja memotong ke atas EMA 25
-    #    - PERBAIKAN: Cukup EMA 7 (paling cepat) yang berada di atas EMA 99 (jangka panjang)
     cross_up_event = (ema7.shift(1) <= ema25.shift(1)) & (ema7 > ema25)
-    above_long_term_trend = (ema7 > ema99)
+    # --- PERBAIKAN: Logika above_long_term_trend yang dapat dikonfigurasi ---
+    if params.get("strict_alignment", True):
+        # Logika ketat: EMA7 dan EMA25 harus di atas EMA99
+        above_long_term_trend = (ema7 > ema99) & (ema25 > ema99)
+    else:
+        # Logika longgar: Cukup EMA25 di atas EMA99 (EMA7 boleh crossing)
+        above_long_term_trend = (ema25 > ema99)
 
     # 2. Kondisi Death Cross (Short)
     #    - EMA 7 baru saja memotong ke bawah EMA 25
-    #    - PERBAIKAN: Cukup EMA 7 (paling cepat) yang berada di bawah EMA 99 (jangka panjang)
     cross_down_event = (ema7.shift(1) >= ema25.shift(1)) & (ema7 < ema25)
-    below_long_term_trend = (ema7 < ema99)
+    # --- PERBAIKAN: Logika below_long_term_trend yang dapat dikonfigurasi ---
+    if params.get("strict_alignment", True):
+        # Logika ketat: EMA7 dan EMA25 harus di bawah EMA99
+        below_long_term_trend = (ema7 < ema99) & (ema25 < ema99)
+    else:
+        # Logika longgar: Cukup EMA25 di bawah EMA99
+        below_long_term_trend = (ema25 < ema99)
 
     # --- Konfirmasi Momentum ---
 
     # 3. Konfirmasi RSI
-    rsi_confirm_long = df[rsi_col] > 50
-    rsi_confirm_short = df[rsi_col] < 50
+    rsi_confirm_long = df[rsi_col] > params.get("rsi_threshold_long", 50)
+    rsi_confirm_short = df[rsi_col] < params.get("rsi_threshold_short", 50)
 
     # 4. Konfirmasi MACD
     macd_confirm_long = df['MACD_12_26_9'] > df['MACDs_12_26_9']
     macd_confirm_short = df['MACD_12_26_9'] < df['MACDs_12_26_9']
 
-    # --- PERBAIKAN TOTAL: Filter Kualitas Sinyal Sesuai Analisis ---
+    # --- PERBAIKAN: Mode Extreme Test ---
+    if params.get("extreme_test_mode", False):
+        # Hanya gunakan persilangan EMA dan konfirmasi RSI dasar
+        
+        # --- PERBAIKAN: Validasi kolom khusus untuk mode ini ---
+        required_cols_extreme = ['EMA_7', 'EMA_25', rsi_col]
+        if any(col not in df.columns for col in required_cols_extreme):
+            # Jika kolom dasar pun tidak ada, maka ada masalah data fundamental
+            print(f"DEBUG [MCH Extreme Test]: Missing fundamental columns: {required_cols_extreme}")
+            return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
 
-    # Filter 1: Higher Timeframe Trend Alignment
-    if params.get("use_htf_filter", True):
-        long_htf_ok = df['close'] > df['EMA_200_1h']
-        short_htf_ok = df['close'] < df['EMA_200_1h']
+        long_signal = cross_up_event & rsi_confirm_long
+        short_signal = cross_down_event & rsi_confirm_short
     else:
-        long_htf_ok = short_htf_ok = pd.Series(True, index=df.index)
+        # --- Logika Filter Lengkap ---
 
-    # Filter 2: Minimum Trend Strength (ADX Level)
-    trend_is_strong_enough = adx > params.get("min_adx_level", 23)
+        # --- PERBAIKAN TOTAL: Validasi Kolom Dinamis ---
+        # Mulai dengan kolom inti yang selalu dibutuhkan
+        adx_col = f"ADX_{CONFIG['atr_period']}"
+        required_cols_full = [
+            'EMA_7', 'EMA_25', 'EMA_99', rsi_col, 'MACD_12_26_9', 'MACDs_12_26_9', adx_col
+        ]
+        # Tambahkan kolom lain hanya jika filternya aktif
+        if params.get("use_htf_filter", True):
+            required_cols_full.append('EMA_200_1h')
+        if params.get("use_di_filter", True):
+            required_cols_full.extend([f"DMP_{CONFIG['atr_period']}", f"DMN_{CONFIG['atr_period']}"])
+        if params.get("use_volatility_filter", True):
+            required_cols_full.append('bb_width_pct')
 
-    # Filter 3: Directional Bias (DI Cross)
-    if params.get("use_di_filter", True):
-        long_di_ok = dmp > dmn
-        short_di_ok = dmn > dmp
-    else:
-        long_di_ok = short_di_ok = pd.Series(True, index=df.index)
+        if any(col not in df.columns for col in required_cols_full):
+            return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+        
+        adx = df[adx_col]
 
-    # Filter 4 & 5: Volatility Expansion (BBW Expanding & above min percentile)
-    # --- PERBAIKAN: Terapkan logika OR yang dapat dikonfigurasi ---
-    bbw_pct = df['bb_width_pct']
-    bbw_expanding_window = params.get("bbw_is_expanding_window", 3)
-    
-    # Kondisi 4: Volatilitas sedang berekspansi
-    is_expanding = bbw_pct > bbw_pct.shift(bbw_expanding_window)
-    # Kondisi 5: Volatilitas sudah berada di level yang sehat (bukan squeeze)
-    is_above_min_vol = bbw_pct > params.get("bbw_min_percentile", 0.30)
+        # Filter 1: Higher Timeframe Trend Alignment
+        if params.get("use_htf_filter", True):
+            long_htf_ok = df['close'] > df['EMA_200_1h']
+            short_htf_ok = df['close'] < df['EMA_200_1h']
+        else:
+            long_htf_ok = short_htf_ok = pd.Series(True, index=df.index)
 
-    if params.get("use_volatility_or_logic", True):
-        volatility_ok = is_expanding | is_above_min_vol # Logika OR: Cukup salah satu terpenuhi
-    else:
-        volatility_ok = is_expanding & is_above_min_vol # Logika AND: Keduanya harus terpenuhi
+        # Filter 2: Minimum Trend Strength (ADX Level)
+        trend_is_strong_enough = adx > params.get("min_adx_level", 23)
 
-    # --- Gabungkan Sinyal ---
-    # Logika dasar + konfirmasi momentum + SEMUA filter kualitas baru
-    long_signal = (cross_up_event & above_long_term_trend & rsi_confirm_long & macd_confirm_long &
-                   long_htf_ok & trend_is_strong_enough & long_di_ok & volatility_ok)
-    short_signal = (cross_down_event & below_long_term_trend & rsi_confirm_short & macd_confirm_short &
-                    short_htf_ok & trend_is_strong_enough & short_di_ok & volatility_ok)
+        # Filter 3: Directional Bias (DI Cross)
+        if params.get("use_di_filter", True):
+            dmp = df[f"DMP_{CONFIG['atr_period']}"]
+            dmn = df[f"DMN_{CONFIG['atr_period']}"]
+            long_di_ok = dmp > dmn
+            short_di_ok = dmn > dmp
+        else:
+            long_di_ok = short_di_ok = pd.Series(True, index=df.index)
+
+        # Filter 4 & 5: Volatility Expansion (BBW Expanding & above min percentile)
+        if params.get("use_volatility_filter", True):
+            bbw_pct = df['bb_width_pct']
+            bbw_expanding_window = params.get("bbw_is_expanding_window", 3)
+            
+            is_expanding = bbw_pct > bbw_pct.shift(bbw_expanding_window)
+            is_above_min_vol = bbw_pct > params.get("bbw_min_percentile", 0.30)
+
+            if params.get("use_volatility_or_logic", True):
+                volatility_ok = is_expanding | is_above_min_vol
+            else:
+                volatility_ok = is_expanding & is_above_min_vol
+        else:
+            volatility_ok = pd.Series(True, index=df.index)
+
+        # Gabungkan Sinyal dengan semua filter
+        long_signal = (cross_up_event & above_long_term_trend & rsi_confirm_long & macd_confirm_long &
+                       long_htf_ok & trend_is_strong_enough & long_di_ok & volatility_ok)
+        short_signal = (cross_down_event & below_long_term_trend & rsi_confirm_short & macd_confirm_short &
+                        short_htf_ok & trend_is_strong_enough & short_di_ok & volatility_ok)
 
     # --- Exit Parameters ---
     # Menggunakan parameter yang sudah dioptimalkan sesuai analisis.

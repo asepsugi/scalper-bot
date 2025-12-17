@@ -85,10 +85,10 @@ CONFIG = {
         },
         "AltcoinVolumeBreakoutHunter": {
             "risk_per_trade": 0.025, # Risiko 2.5% untuk strategi breakout yang lebih agresif
-            # --- REKOMENDASI OPTIMASI ---
+            # --- PERBAIKAN: Terapkan parameter terbaik dari hasil backtest ---
             "breakout_window": 12,
-            "volume_spike_multiplier": 3.5, # 3.5-4.0x, kita ambil tengah
-            "candle_body_ratio": 0.58,
+            "volume_spike_multiplier": 3.8, # Dari backtest 18:39:49 (PF 3.83)
+            "candle_body_ratio": 0.58, # Dari backtest 18:39:49
             "anti_chase_pct": 0.08, # Maksimal naik 8%
             # --- BARU: Filter ADX yang dapat dikonfigurasi ---
             "adx_veto_threshold": 18, # Filter momentum dump, hindari sideways chop
@@ -140,13 +140,20 @@ CONFIG = {
         "MomentumCrossHunter": {
             "risk_per_trade": 0.012,
             # --- PERBAIKAN: Filter Entry yang Diperketat ---
+            # --- BARU: Mode Extreme Test ---
+            "extreme_test_mode": False,       # Jika True, hanya gunakan EMA cross + RSI confirm.
             "use_htf_filter": False,          # Filter 1: Gunakan filter tren timeframe 1 jam (EMA 200).
             "min_adx_level": 18,             # Filter 2: DILONGGARKAN. ADX harus di atas 20 (dari 23).
             "use_di_filter": False,           # Filter 3: +DI harus > -DI untuk long (dan sebaliknya).
             # --- PERBAIKAN: Logika Volatilitas yang Lebih Fleksibel ---
-            "use_volatility_or_logic": True, # Jika True, (Filter 4 OR Filter 5). Jika False, (Filter 4 AND Filter 5).
+            "use_volatility_filter": False,  # BARU: Nonaktifkan sementara untuk diagnostik (default: True)
+            "strict_alignment": False,       # BARU: Jika False, above_long_term_trend hanya cek EMA25 vs EMA99
+            "use_volatility_or_logic": True, # Jika True, (Filter 4 OR Filter 5). Jika False, (Filter 4 AND Filter 5)
             "bbw_is_expanding_window": 5,    # Filter 4: BBW harus lebih besar dari nilainya 3 candle lalu.
             "bbw_min_percentile": 0.20,      # Filter 5: DILONGGARKAN. BBW harus di atas percentile 30% (dari 35%).
+            # --- PERBAIKAN: Loosen RSI confirm ---
+            "rsi_threshold_long": 50,        # Kembali ke 50 untuk pengujian murni
+            "rsi_threshold_short": 50,       # Kembali ke 50 untuk pengujian murni
             # --- PERBAIKAN: Manajemen Stop-Loss & Exit ---
             "sl_multiplier": 2.8,            # SL lebih longgar untuk mengakomodasi volatilitas.
             "rr_ratio": 2.5,                 # Target RR dinaikkan sedikit.
