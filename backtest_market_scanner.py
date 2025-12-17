@@ -1,10 +1,12 @@
 import argparse
 import asyncio
 import pandas as pd
+import pickle
 import numpy as np
 import time
 import ccxt
 from rich.console import Console
+from pathlib import Path
 
 from config import CONFIG, LIVE_TRADING_CONFIG, API_KEYS, WHITELIST_ROTATION_CONFIG
 from strategies import STRATEGY_CONFIG
@@ -12,6 +14,9 @@ from utils.backtester_engine import PortfolioBacktester # REVISI: Impor engine b
 from utils.common_utils import get_all_futures_symbols
 
 console = Console()
+# --- PERBAIKAN: Definisikan direktori cache di sini ---
+CACHE_DIR = Path("cache")
+CACHE_DIR.mkdir(exist_ok=True)
 
 async def run_scan(backtester, symbols, limit, start_date, end_date):
     """
@@ -25,16 +30,41 @@ async def run_scan(backtester, symbols, limit, start_date, end_date):
     console.log(f"Starting concurrent data fetching for {len(symbols)} symbols...")
     
     loop = asyncio.get_event_loop()
-    
+
     # --- PERBAIKAN KRUSIAL: Proses data dalam batch untuk menghindari API ban ---
     batch_size = 5  # Proses 5 simbol sekaligus, ini jauh lebih aman dari 50.
     all_results = []
     for i in range(0, len(symbols), batch_size):
         batch_symbols = symbols[i:i + batch_size]
         console.log(f"\n[bold]Processing batch {i//batch_size + 1}/{(len(symbols) + batch_size - 1)//batch_size} (Symbols: {', '.join(batch_symbols)})[/bold]")
-        
-        tasks = [loop.run_in_executor(None, backtester.fetch_and_prepare_symbol_data, symbol, limit, start_date, end_date) for symbol in batch_symbols]
-        
+
+        # --- PERBAIKAN: Logika caching yang dipercepat ---
+        async def process_symbol_with_smart_cache(symbol):
+            """Wrapper untuk memproses data dengan cache yang sudah diolah."""
+            # Buat nama file cache untuk data yang sudah diproses
+            safe_symbol = symbol.replace('/', '_')
+            date_part = f"_{start_date}_to_{end_date}" if start_date else f"_limit_{limit}"
+            processed_cache_file = CACHE_DIR / f"PROCESSED_{safe_symbol}{date_part}.pkl"
+
+            # 1. Coba muat dari cache yang sudah diproses
+            if processed_cache_file.exists():
+                try:
+                    with open(processed_cache_file, 'rb') as f:
+                        console.log(f"Loading [bold green]PROCESSED[/bold green] data for {symbol} from cache...")
+                        return symbol, (pickle.load(f), True)
+                except Exception as e:
+                    console.log(f"[yellow]Corrupted processed cache for {symbol}, reprocessing... Error: {e}[/yellow]")
+
+            # 2. Jika tidak ada, proses seperti biasa
+            result_tuple = await loop.run_in_executor(None, backtester.fetch_and_prepare_symbol_data, symbol, limit, start_date, end_date)
+            
+            # 3. Simpan hasil olahan ke cache baru
+            if result_tuple and result_tuple[0] is not None:
+                with open(processed_cache_file, 'wb') as f:
+                    pickle.dump(result_tuple[0], f)
+            return symbol, result_tuple
+
+        tasks = [process_symbol_with_smart_cache(symbol) for symbol in batch_symbols]
         batch_results = await asyncio.gather(*tasks)
         all_results.extend(batch_results)
         
@@ -43,7 +73,7 @@ async def run_scan(backtester, symbols, limit, start_date, end_date):
         await asyncio.sleep(2)
 
     # Proses hasil yang sudah dikumpulkan
-    for symbol, (result_df, from_cache) in zip(symbols, all_results):
+    for symbol, (result_df, from_cache) in all_results:
         if result_df is not None and not result_df.empty:
             all_data[symbol] = result_df
             console.log(f"({i+1}/{len(symbols)}) Successfully processed [bold cyan]{symbol}[/bold cyan] (from cache: {from_cache})")

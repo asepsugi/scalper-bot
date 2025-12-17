@@ -700,85 +700,48 @@ def signal_version_LongOnlyCorrectionHunter(df, symbol: str = None):
     - Logic: Beli saat harga oversold ekstrem di dekat lower BB, dengan konfirmasi volume dan candle bullish.
     """
     params = CONFIG.get("strategy_params", {}).get("LongOnlyCorrectionHunter", {})
-
-    # --- Indikator & Kolom ---
-    vol_ma_col = f"VOL_{CONFIG['volume_lookback']}"
     rsi_col = f"RSI_{CONFIG['rsi_period']}"
-    atr_col = f"ATRr_{CONFIG['atr_period']}"
     
-    # --- PERBAIKAN: Gunakan parameter BB dinamis dari config ---
+    # --- PERBAIKAN: Gunakan parameter BB dinamis dari config dan siapkan kolom yang dibutuhkan ---
     bb_period = params.get("bb_period", 20)
-    bb_std = params.get("bb_std_dev", 1.8)
+    bb_std = params.get("bb_std_dev", 1.5)
     bb_lower_col = f'BBL_{bb_period}_{bb_std}'
-    bb_upper_col = f'BBU_{bb_period}_{bb_std}'
-    ema50_col = f"EMA_{CONFIG['ema_period']}"
-    ema200_col = "EMA_200"
-    adx_col = f"ADX_{CONFIG['atr_period']}"
-    
+
     # Hitung BB kustom jika belum ada di DataFrame
     if bb_lower_col not in df.columns:
         df.ta.bbands(length=bb_period, std=bb_std, append=True)
 
-    required_cols = [vol_ma_col, rsi_col, atr_col, bb_lower_col, bb_upper_col, 'high', 'low', 'close', 'open']
-
-    # --- PERBAIKAN: Tambahkan kolom untuk pre-filter dump ---
-    required_cols.extend([ema50_col, ema200_col, adx_col])
+    # --- PERBAIKAN: Sederhanakan kolom yang dibutuhkan ---
+    required_cols = [rsi_col, bb_lower_col, 'rsi_1h', 'EMA_200_1h', 'close', 'open', 'low']
 
     if any(col not in df.columns for col in required_cols):
         return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
 
     # =========================================================================
-    # TAHAP 1: PRE-FILTER AUTO-DETEKSI DUMP KERAS
+    # PERBAIKAN: Logika Sinyal yang Disederhanakan dan Lebih Efektif
     # =========================================================================
-    # Kondisi ini harus terpenuhi SEBELUM kita mencari sinyal entry.
-    # Ini berfungsi sebagai filter "universe selection" untuk fokus pada koin yang tepat.
 
-    # 1. Jarak dari ATH 30-hari & 7-hari
-    max_high_30d = df['high'].rolling(window=30*24*12, min_periods=1).max() # Approx 30 hari di 5m
-    max_high_7d = df['high'].rolling(window=7*24*12, min_periods=1).max() # Approx 7 hari di 5m
-    from_ath_30d_ok = (df['close'] / max_high_30d) < params.get("dump_ath30d_threshold", 0.65)
-    from_ath_7d_ok = (df['close'] / max_high_7d) < params.get("dump_ath7d_threshold", 0.78)
+    # Filter 1: Konteks Tren Makro (Timeframe 1 Jam)
+    # Kita hanya tertarik membeli koreksi jika tren besarnya masih naik.
+    macro_trend_is_up = (df['close'] > df['EMA_200_1h']) & (df['rsi_1h'] > 45)
 
-    # 2. Volume Spike Distribusi (vs MA 30 hari)
-    # Kita butuh data harian untuk MA 30 hari, jadi kita aproksimasi dengan MA periode panjang di 5m
-    vol_ma_30d_approx = df['volume'].rolling(window=30*24*12, min_periods=1).mean()
-    volume_dist_ok = df['volume'] > (vol_ma_30d_approx * params.get("dump_vol_ma_multiplier", 2.8))
+    # Filter 2: Kondisi Oversold di Timeframe Sinyal (5 Menit)
+    # Harga harus menyentuh atau sedikit di bawah Lower Bollinger Band.
+    price_is_oversold = df['low'] <= df[bb_lower_col]
+    # RSI juga harus menunjukkan kondisi oversold.
+    rsi_is_oversold = df[rsi_col] < CONFIG.get("rsi_oversold", 35)
 
-    # 3. Konfirmasi Downtrend (RSI, EMA, ADX)
-    rsi_downtrend_ok = df[rsi_col] < params.get("dump_rsi_threshold", 45)
-    ema_downtrend_ok = (df['close'] < df[ema50_col]) & (df['close'] < df[ema200_col])
-    adx_downtrend_ok = df[adx_col] > params.get("dump_adx_threshold", 22)
-
-    # Gabungkan semua kondisi pre-filter
-    is_hard_dump_detected = (
-        from_ath_30d_ok &
-        from_ath_7d_ok &
-        volume_dist_ok &
-        rsi_downtrend_ok &
-        ema_downtrend_ok &
-        adx_downtrend_ok
-    )
-
-    # =========================================================================
-    # TAHAP 2: SINYAL ENTRY (HANYA JIKA DUMP KERAS TERDETEKSI)
-    # =========================================================================
-    # Logika ini sama seperti sebelumnya, tapi sekarang hanya aktif jika pre-filter lolos.
-
-    # 1. Harga menyentuh Lower BB (indikasi oversold ekstrem).
-    price_at_lower_band = df['low'] <= df[bb_lower_col]
-
-    # 2. Volume spike kapitulasi (vs MA 20 candle).
-    volume_spike = df['volume'] > (df[vol_ma_col] * params.get("volume_spike_multiplier", 2.5))
-
-    # 3. Candle konfirmasi bullish (hijau).
-    confirmation_candle = df['close'] > df['open']
+    # Filter 3: Sinyal Konfirmasi Reversal
+    # Kita mencari candle yang ditutup lebih tinggi dari pembukaannya (candle hijau).
+    # Ini adalah konfirmasi paling sederhana bahwa tekanan beli mulai muncul.
+    is_bullish_candle = df['close'] > df['open']
 
     # --- Gabungkan Sinyal (Hanya Long) ---
     long_signal = (
-        is_hard_dump_detected & # <-- KONDISI BARU
-        price_at_lower_band &
-        volume_spike &
-        confirmation_candle
+        macro_trend_is_up &
+        price_is_oversold &
+        rsi_is_oversold &
+        is_bullish_candle
     )
 
     # Matikan sinyal short secara total untuk strategi ini.
@@ -793,6 +756,96 @@ def signal_version_LongOnlyCorrectionHunter(df, symbol: str = None):
             "enabled": True,
             "trigger_rr": params.get("trailing_trigger_rr", 3.0), # Trailing dimulai setelah 3R
             "distance_atr": 3.0, # Jarak trailing standar
+        }
+    }
+
+    return long_signal, short_signal, exit_params
+
+def signal_version_MomentumCrossHunter(df, symbol: str = None):
+    """
+    STRATEGI BARU: Momentum Cross Hunter
+    - Tujuan: Menangkap momentum yang kuat saat terjadi persilangan MA jangka pendek dan menengah.
+    - Logic: Menunggu Golden Cross (7/25/99) atau Death Cross (7/25/99) dengan konfirmasi dari RSI dan MACD.
+    """
+    # --- PERBAIKAN: Baca parameter dari blok config khusus ---
+    params = CONFIG.get("strategy_params", {}).get("MomentumCrossHunter", {})
+
+    # --- Indikator & Kolom yang Dibutuhkan ---
+    rsi_col = f"RSI_{CONFIG['rsi_period']}"
+    adx_col = f"ADX_{CONFIG['atr_period']}"
+    # --- PERBAIKAN: Tambahkan kolom yang dibutuhkan untuk filter baru ---
+    required_cols = [
+        'EMA_7', 'EMA_25', 'EMA_99', rsi_col,
+        'MACD_12_26_9', 'MACDs_12_26_9',
+        # Kolom untuk filter baru
+        adx_col, 'bb_width_pct'
+    ]
+
+    # Validasi data
+    if any(col not in df.columns for col in required_cols):
+        return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+
+    # --- FINE-TUNING: Ambil data untuk filter baru ---
+    adx = df.get(adx_col)
+
+    # --- Parameter ---
+    ema7 = df['EMA_7']
+    ema25 = df['EMA_25']
+    ema99 = df['EMA_99']
+
+    # --- Kondisi Sinyal ---
+
+    # 1. Kondisi Golden Cross (Long)
+    #    - EMA 7 baru saja memotong ke atas EMA 25
+    #    - EMA 7 dan EMA 25 keduanya berada di atas EMA 99
+    cross_up_event = (ema7.shift(1) <= ema25.shift(1)) & (ema7 > ema25)
+    above_long_term_trend = (ema7 > ema99) & (ema25 > ema99)
+
+    # 2. Kondisi Death Cross (Short)
+    #    - EMA 7 baru saja memotong ke bawah EMA 25
+    #    - EMA 7 dan EMA 25 keduanya berada di bawah EMA 99
+    cross_down_event = (ema7.shift(1) >= ema25.shift(1)) & (ema7 < ema25)
+    below_long_term_trend = (ema7 < ema99) & (ema25 < ema99)
+
+    # --- Konfirmasi Momentum ---
+
+    # 3. Konfirmasi RSI
+    rsi_confirm_long = df[rsi_col] > 50
+    rsi_confirm_short = df[rsi_col] < 50
+
+    # 4. Konfirmasi MACD
+    macd_confirm_long = df['MACD_12_26_9'] > df['MACDs_12_26_9']
+    macd_confirm_short = df['MACD_12_26_9'] < df['MACDs_12_26_9']
+
+    # --- PERBAIKAN: Filter Kualitas Sinyal yang Lebih Cerdas ---
+
+    # Filter 1: Momentum Sedang Dibangun (ADX Rising)
+    # Kita tidak butuh ADX tinggi, tapi ADX yang sedang naik.
+    if params.get("adx_is_rising", True):
+        momentum_building = adx > adx.shift(2) # ADX saat ini > ADX 2 candle lalu
+    else:
+        momentum_building = pd.Series(True, index=df.index)
+
+    # Filter 2: Volatilitas Mulai Ekspansi (Bollinger Bands Width)
+    # Sinyal valid jika volatilitas keluar dari zona 'squeeze' tapi belum terlalu liar.
+    bbw_pct = df.get('bb_width_pct', pd.Series(0.5, index=df.index))
+    volatility_expanding = (bbw_pct > params.get("bbw_percentile_min", 0.10)) & \
+                           (bbw_pct < params.get("bbw_percentile_max", 0.60))
+
+    # --- Gabungkan Sinyal ---
+    # Logika dasar + konfirmasi momentum + filter kualitas baru
+    long_signal = cross_up_event & above_long_term_trend & rsi_confirm_long & macd_confirm_long & momentum_building & volatility_expanding
+    short_signal = cross_down_event & below_long_term_trend & rsi_confirm_short & macd_confirm_short & momentum_building & volatility_expanding
+
+    # --- Exit Parameters ---
+    # Menggunakan parameter yang seimbang, cocok untuk strategi tren.
+    exit_params = {
+        'sl_multiplier': params.get("sl_multiplier", 1.9),
+        'rr_ratio': params.get("rr_ratio", 2.1),
+        'trailing': {
+            "enabled": True,
+            "trigger_rr": params.get("trailing_trigger_rr", 1.5),
+            "distance_atr": params.get("trailing_distance_atr", 1.8),
         }
     }
 
@@ -821,9 +874,13 @@ STRATEGY_CONFIG = {
     #     "function": signal_version_MemecoinMoonshotHunter,
     #     "weight": 0.30 # Bobot lebih rendah, high-risk high-reward
     # },
-    "LongOnlyCorrectionHunter": {
-        "function": signal_version_LongOnlyCorrectionHunter,
-        "weight": 0.40 # Bobot komplementer untuk menangkap koreksi
+    # "LongOnlyCorrectionHunter": {
+    #     "function": signal_version_LongOnlyCorrectionHunter,
+    #     "weight": 0.40 # Bobot komplementer untuk menangkap koreksi
+    # },
+    "MomentumCrossHunter": {
+        "function": signal_version_MomentumCrossHunter,
+        "weight": 0.40 # Bobot standar untuk strategi tren momentum
     },
     # "HybridScalper": {
     #     "function": signal_version_HYBRID_SCALPER,

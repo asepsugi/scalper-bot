@@ -87,7 +87,7 @@ CONFIG = {
             "risk_per_trade": 0.025, # Risiko 2.5% untuk strategi breakout yang lebih agresif
             # --- REKOMENDASI OPTIMASI ---
             "breakout_window": 12,
-            "volume_spike_multiplier": 4.0, # 3.5-4.0x, kita ambil tengah
+            "volume_spike_multiplier": 3.5, # 3.5-4.0x, kita ambil tengah
             "candle_body_ratio": 0.58,
             "anti_chase_pct": 0.08, # Maksimal naik 8%
             # --- BARU: Filter ADX yang dapat dikonfigurasi ---
@@ -117,10 +117,10 @@ CONFIG = {
         "LongOnlyCorrectionHunter": {
             "risk_per_trade": 0.009, # Risiko standar
             # --- PERBAIKAN BERDASARKAN ANALISIS ---
-            "volume_spike_multiplier": 2.5, # Untuk konfirmasi entry (vs MA20)
+            "volume_spike_multiplier": 1.8, # Untuk konfirmasi entry (vs MA20)
             "sl_multiplier": 2.2,
             "bb_period": 20, # Periode Bollinger Bands
-            "bb_std_dev": 1.8, # Dibuat lebih sensitif (dari 2.0 ke 1.8)
+            "bb_std_dev": 1.5, # Dibuat lebih sensitif (dari 2.0 ke 1.8)
             
             # --- BARU: Parameter Auto-Deteksi Dump Keras (Pre-Filter) ---
             "dump_ath30d_threshold": 0.65,   # close < 65% dari ATH 30 hari (dump >35%)
@@ -136,8 +136,21 @@ CONFIG = {
                 (8.0, 0.30)  # Jual 30% di 8R
             ],
             "trailing_trigger_rr": 3.0 # Mulai trailing setelah 3R
+        },
+        "MomentumCrossHunter": {
+            "risk_per_trade": 0.012,
+            # Filter 1: ADX harus sedang naik (menunjukkan momentum sedang dibangun)
+            "adx_is_rising": True,
+            # Filter 2: Volatilitas (BBW) harus mulai ekspansi dari level rendah
+            "bbw_percentile_min": 0.10, # BBW harus di atas percentile 10% (keluar dari squeeze)
+            "bbw_percentile_max": 0.60, # BBW harus di bawah percentile 60% (hindari volatilitas ekstrem)
+            # Exit Parameters
+            "sl_multiplier": 1.9,
+            "rr_ratio": 2.1,
+            "trailing_trigger_rr": 1.5,
+            "trailing_distance_atr": 1.8
         }
-    },
+    }, # <-- PERBAIKAN: Tambahkan koma yang hilang di sini
 
     # NEW: Essential filters for scalping profitability
     "trade_filters": {

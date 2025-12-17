@@ -232,6 +232,11 @@ def calculate_indicators(df):
             # TREND INDICATORS
             # =========================================================================
             df.ta.ema(length=9, append=True)
+            # --- PERBAIKAN: Tambahkan EMA yang dibutuhkan oleh MomentumCrossHunter ---
+            df.ta.ema(length=7, append=True)
+            df.ta.ema(length=25, append=True)
+            df.ta.ema(length=99, append=True)
+            # --------------------------------------------------------------------
             df.ta.ema(length=CONFIG["ema_period"], append=True)
             df.ta.ema(length=200, append=True)
             
@@ -240,7 +245,9 @@ def calculate_indicators(df):
             # =========================================================================
             df.ta.rsi(length=CONFIG["rsi_period"], append=True)
             df.ta.willr(length=14, append=True)
-            # --- PERBAIKAN: Tambahkan Stochastic dan MACD sesuai permintaan ---
+            # --- PERBAIKAN: Tambahkan Stochastic & Stochastic RSI ---
+            # StochRSI lebih cepat dan lebih cocok untuk scalping trigger
+            df.ta.stochrsi(length=14, rsi_length=14, k=3, d=3, append=True)
             df.ta.stoch(k=14, d=3, smooth_k=3, append=True)
             df.ta.macd(fast=12, slow=26, signal=9, append=True)
             # ----------------------------------------------------------------
