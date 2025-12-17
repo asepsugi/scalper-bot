@@ -805,15 +805,15 @@ def signal_version_MomentumCrossHunter(df, symbol: str = None):
 
     # 1. Kondisi Golden Cross (Long)
     #    - EMA 7 baru saja memotong ke atas EMA 25
-    #    - EMA 7 dan EMA 25 keduanya berada di atas EMA 99
+    #    - PERBAIKAN: Cukup EMA 7 (paling cepat) yang berada di atas EMA 99 (jangka panjang)
     cross_up_event = (ema7.shift(1) <= ema25.shift(1)) & (ema7 > ema25)
-    above_long_term_trend = (ema7 > ema99) & (ema25 > ema99)
+    above_long_term_trend = (ema7 > ema99)
 
     # 2. Kondisi Death Cross (Short)
     #    - EMA 7 baru saja memotong ke bawah EMA 25
-    #    - EMA 7 dan EMA 25 keduanya berada di bawah EMA 99
+    #    - PERBAIKAN: Cukup EMA 7 (paling cepat) yang berada di bawah EMA 99 (jangka panjang)
     cross_down_event = (ema7.shift(1) >= ema25.shift(1)) & (ema7 < ema25)
-    below_long_term_trend = (ema7 < ema99) & (ema25 < ema99)
+    below_long_term_trend = (ema7 < ema99)
 
     # --- Konfirmasi Momentum ---
 
