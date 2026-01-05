@@ -84,7 +84,7 @@ CONFIG = {
             "debug_mode": False  # Log kenapa sinyal None
         },
         "AltcoinVolumeBreakoutHunter": {
-            "risk_per_trade": 0.025, # Risiko 2.5% untuk strategi breakout yang lebih agresif
+            "risk_per_trade": 0.028, # Risiko 2.5% untuk strategi breakout yang lebih agresif
             # --- PERBAIKAN: Terapkan parameter terbaik dari hasil backtest ---
             "breakout_window": 12,
             "volume_spike_multiplier": 3.8, # Dari backtest 18:39:49 (PF 3.83)
@@ -109,7 +109,7 @@ CONFIG = {
             "regime_atr_pct_threshold": 0.0085 # 0.85%
         },
         "MemecoinMoonshotHunter": {
-            "risk_per_trade": 0.015, # Risiko lebih tinggi untuk potensi moonshot
+            "risk_per_trade": 0.010, # Risiko lebih tinggi untuk potensi moonshot
             "volume_spike_multiplier": 5, # 4.5-5.5x, kita ambil tengah-atas
             "rsi_threshold": 70,
             "breakout_window": 14,
@@ -120,28 +120,26 @@ CONFIG = {
             "trailing_distance_atr": 3.5, # type: ignore
             "symbol_whitelist": ["PEPEUSDT", "WIFUSDT", "BONKUSDT", "FLOKIUSDT", "MEMEUSDT", "ORDIUSDT", "SATSUSDT"] # Fokus pada memecoin
         },
-        "LongOnlyCorrectionHunter": {
-            "risk_per_trade": 0.009, # Risiko standar
-            # --- PERBAIKAN BERDASARKAN ANALISIS ---
-            "volume_spike_multiplier": 1.8, # Untuk konfirmasi entry (vs MA20)
-            "sl_multiplier": 2.2,
-            "bb_period": 20, # Periode Bollinger Bands
-            "bb_std_dev": 1.5, # Dibuat lebih sensitif (dari 2.0 ke 1.8)
-            
-            # --- BARU: Parameter Auto-Deteksi Dump Keras (Pre-Filter) ---
-            "dump_ath30d_threshold": 0.65,   # close < 65% dari ATH 30 hari (dump >35%)
-            "dump_ath7d_threshold": 0.78,    # close < 78% dari ATH 7 hari (dump >22%)
-            "dump_vol_ma_multiplier": 2.8,   # Volume > 2.8x MA volume 30 hari
-            "dump_rsi_threshold": 45,        # RSI < 45 (konfirmasi momentum bearish)
-            "dump_adx_threshold": 22,        # ADX > 22 (konfirmasi tren bearish kuat)
-            # -------------------------------------------------------------
-            
+        "LongOnlyCorrectionHunter": { # REFACTORED to Mean Reversion / Dip Buyer
+            "risk_per_trade": 0.01,          # Risiko 1%
+            # --- Entry Parameters ---
+            "rsi_oversold_threshold": 30,    # PERBAIKAN: Beli jika RSI < 30 (lebih oversold)
+            "bb_period": 20,                 # Periode Bollinger Bands
+            "bb_std_dev": 2.2,               # PERBAIKAN: Standar deviasi BB lebih lebar untuk menangkap volatilitas
+            "use_macro_trend_filter": False,  # Wajibkan harga > EMA 200 1h
+            # --- BARU: Filter Konfirmasi Tambahan ---
+            "min_volume_ratio": 1.2,         # Volume harus > 1.2x rata-rata
+            "require_strong_candle_body": True, # Wajibkan candle bullish yang kuat
+
             # --- Exit Strategy ---
+            "sl_multiplier": 2.5,            # PERBAIKAN: Beri ruang lebih untuk SL
+            "rr_ratio": 2.0,                 # PERBAIKAN: Target realistis
             "partial_tps": [
                 (4.0, 0.50), # Jual 50% di 4R
                 (8.0, 0.30)  # Jual 30% di 8R
             ],
-            "trailing_trigger_rr": 3.0 # Mulai trailing setelah 3R
+            "trailing_trigger_rr": 1.2,      # BARU: Mulai trailing cepat
+            "trailing_distance_atr": 1.8     # BARU: Jarak trailing lebih ketat
         },
         "MomentumCrossHunter": {
             "risk_per_trade": 0.012,
@@ -149,11 +147,11 @@ CONFIG = {
             # --- BARU: Mode Extreme Test ---
             "extreme_test_mode": False,      # PASTIKAN SELALU False untuk backtest serius.
             "use_htf_filter": False,         # PERBAIKAN: Nonaktifkan. Terlalu ketat untuk sinyal crossover.
-            "min_adx_level": 19,             # PERBAIKAN: Gunakan 19, terbukti profitabel di backtest sebelumnya.
-            "use_di_filter": False,           # Filter 3: +DI harus > -DI untuk long (dan sebaliknya).
+            "min_adx_level": 22,             # PERBAIKAN: Gunakan 19, terbukti profitabel di backtest sebelumnya.
+            "use_di_filter": True,           # Filter 3: +DI harus > -DI untuk long (dan sebaliknya).
             # --- PERBAIKAN: Logika Volatilitas yang Lebih Fleksibel ---
             "use_volatility_filter": True,  # BARU: Nonaktifkan sementara untuk diagnostik (default: True)
-            "strict_alignment": False,       # PERBAIKAN: Gunakan mode longgar, terbukti lebih baik untuk menangkap sinyal awal.
+            "strict_alignment": True,       # PERBAIKAN: Gunakan mode longgar, terbukti lebih baik untuk menangkap sinyal awal.
             "use_volatility_or_logic": True, # Jika True, (Filter 4 OR Filter 5). Jika False, (Filter 4 AND Filter 5)
             "bbw_is_expanding_window": 10,    # Filter 4: BBW harus lebih besar dari nilainya 3 candle lalu.
             "bbw_min_percentile": 0.15,      # Filter 5: DILONGGARKAN. BBW harus di atas percentile 30% (dari 35%).
@@ -165,18 +163,41 @@ CONFIG = {
             "allow_long": False,             # Blokir sinyal long untuk sementara
             "allow_short": True,             # Izinkan sinyal short
             # --- PERBAIKAN: Manajemen Stop-Loss & Exit ---
-            "sl_multiplier": 3.3,            # SL lebih longgar untuk mengakomodasi volatilitas.
+            "sl_multiplier": 3.5,            # SL lebih longgar untuk mengakomodasi volatilitas.
             "rr_ratio": 2.5,                 # Target RR dinaikkan sedikit.
             "use_breakeven_stop": True,      # Aktifkan breakeven stop.
             "breakeven_trigger_rr": 1.0,     # Pindahkan SL ke breakeven setelah mencapai 1R.
             "trailing_trigger_rr": 2.0,      # Mulai trailing lebih awal.
-            "trailing_distance_atr": 2.8,    # Jarak trailing lebih ketat untuk mengunci profit.
+            "trailing_distance_atr": 3.0,    # Jarak trailing lebih ketat untuk mengunci profit.
 
             # --- PERBAIKAN: Adaptasi Aset ---
             "symbol_blacklist": [
-                "PUMPUSDT", "PEPEUSDT", "1000PEPEUSDT", "BONKUSDT", "FLOKIUSDT", "MEMEUSDT", "FARTCOINUSDT", "TRUTHUSDT"
+                "PUMPUSDT", "PEPEUSDT", "1000PEPEUSDT", "BONKUSDT", "FLOKIUSDT", "MEMEUSDT", "FARTCOINUSDT", "TRUTHUSDT",
+                "WIFUSDT", "PENGUUSDT", "HUSDT", "JELLYJELLYUSDT", "ENAUSDT", "ASTERUSDT"
             ]
-        }
+        },
+        "RSIDivergenceHunter": {
+            "risk_per_trade": 0.015,
+            # --- Entry Parameters ---
+            "adx_threshold": 20,             # ADX must be > 20 to confirm trend strength
+            "use_macd_div_confirm": True,    # Use MACD divergence as a second confirmation
+            # --- BARU: Market Regime Filter ---
+            "use_regime_filter": True,       # Aktifkan filter market regime
+            "regime_btc_rsi_threshold": 52,  # Hanya aktifkan strategi jika RSI 1h BTC di bawah 52 (choppy/bearish)
+
+            # --- Directional Control ---
+            "allow_long": False,             # Focus on short signals for now
+            "allow_short": True,
+            # --- Exit Strategy ---
+            "sl_multiplier": 2.8,
+            "rr_ratio": 3.0, # Target utama, trailing akan mengambil alih
+            "trailing_trigger_rr": 1.5,      # BARU: Mulai trailing setelah 1.5R
+            "trailing_distance_atr": 2.2,    # BARU: Jarak trailing lebih ketat
+            # --- BARU: Blacklist untuk koin yang tidak cocok ---
+            "symbol_blacklist": [
+                "TRUMPUSDT", "XLMUSDT", "PENGUUSDT", "HUSDT", "JELLYJELLYUSDT", "MYXUSDT", "MOODENGUSDT", "NEIROUSDT"
+            ]
+        },
     }, # <-- PERBAIKAN: Tambahkan koma yang hilang di sini
 
     # NEW: Essential filters for scalping profitability
@@ -226,7 +247,7 @@ LIVE_TRADING_CONFIG = {
     "max_margin_usage_pct": 0.60,  # DOWN from 0.80 (more conservative)
     
     # CRITICAL FIX: Require stronger consensus
-    "consensus_ratio": 0.01,  # DOWN from 0.75 (Longgarkan untuk lebih banyak trade)
+    "consensus_ratio": 0.09,  # DOWN from 0.75 (Longgarkan untuk lebih banyak trade)
     
     # Circuit breaker - Tightened
     "circuit_breaker_multiplier": 1.3,  # DOWN from 1.5 (exit sooner)
@@ -250,8 +271,8 @@ LIVE_TRADING_CONFIG = {
     # --- PILAR 3: WEEKLY PERFORMANCE KILLSWITCH ---
     "weekly_killswitch": {
         "enabled": True,
-        "max_weekly_loss_pct": -0.08, # -8.0%
-        "pause_duration_hours": 72, # 3 hari
+        "max_weekly_loss_pct": -0.20, # -20.0%
+        "pause_duration_hours": 48, # 3 hari
         "reactivate_adx_threshold": 20,
         "reactivate_atr_pct_threshold": 0.0090 # 0.9%
     },

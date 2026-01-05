@@ -348,6 +348,17 @@ def calculate_indicators(df):
         mfi_hl = (df['MFI_14'] > df['MFI_14'].shift(10)) & (df['MFI_14'] > df['MFI_14'].rolling(10).min().shift(1))
         df['mfi_bullish_div'] = price_ll & mfi_hl
     
+    # 8. MACD Histogram Divergence (for RSI Divergence Hunter)
+    macd_hist_col = 'MACDh_12_26_9'
+    if macd_hist_col in df.columns:
+        price_hh = (df['close'] > df['close'].shift(12)) & (df['close'] > df['close'].rolling(12).max().shift(1))
+        macd_hist_lh = (df[macd_hist_col] < df[macd_hist_col].shift(12)) & (df[macd_hist_col] < df[macd_hist_col].rolling(12).max().shift(1))
+        df['macd_bearish_div'] = price_hh & macd_hist_lh
+
+        price_ll = (df['close'] < df['close'].shift(12)) & (df['close'] < df['close'].rolling(12).min().shift(1))
+        macd_hist_hl = (df[macd_hist_col] > df[macd_hist_col].shift(12)) & (df[macd_hist_col] > df[macd_hist_col].rolling(12).min().shift(1))
+        df['macd_bullish_div'] = price_ll & macd_hist_hl
+
     return df
 
 

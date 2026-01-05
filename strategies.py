@@ -701,67 +701,77 @@ def signal_version_MemecoinMoonshotHunter(df, symbol: str = None):
 
 def signal_version_LongOnlyCorrectionHunter(df, symbol: str = None):
     """
-    STRATEGI 2: Long-Only Correction Hunter
+    REFACTORED: Mean Reversion / Dip Buyer
     - Tujuan: Menangkap pantulan teknikal (technical bounce) setelah terjadi dump yang signifikan.
-    - Logic: Beli saat harga oversold ekstrem di dekat lower BB, dengan konfirmasi volume dan candle bullish.
+    - Logic: Beli saat harga oversold (RSI < 35) dan menyentuh Lower Bollinger Band, HANYA jika tren makro masih bullish.
     """
     params = CONFIG.get("strategy_params", {}).get("LongOnlyCorrectionHunter", {})
     rsi_col = f"RSI_{CONFIG['rsi_period']}"
     
-    # --- PERBAIKAN: Gunakan parameter BB dinamis dari config dan siapkan kolom yang dibutuhkan ---
+    # --- REFACTOR: Gunakan parameter BB dinamis dari config ---
     bb_period = params.get("bb_period", 20)
-    bb_std = params.get("bb_std_dev", 1.5)
+    bb_std = params.get("bb_std_dev", 2.2)
     bb_lower_col = f'BBL_{bb_period}_{bb_std}'
 
     # Hitung BB kustom jika belum ada di DataFrame
     if bb_lower_col not in df.columns:
         df.ta.bbands(length=bb_period, std=bb_std, append=True)
 
-    # --- PERBAIKAN: Sederhanakan kolom yang dibutuhkan ---
-    required_cols = [rsi_col, bb_lower_col, 'rsi_1h', 'EMA_200_1h', 'close', 'open', 'low']
+    # --- REFACTOR: Sederhanakan kolom yang dibutuhkan ---
+    # PERBAIKAN: Tambahkan 'volume_ratio' dan 'body_strength'
+    required_cols = [rsi_col, bb_lower_col, 'rsi_1h', 'EMA_200_1h', 'close', 'open', 'low', 'volume_ratio', 'body_strength']
 
     if any(col not in df.columns for col in required_cols):
         return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
 
     # =========================================================================
-    # PERBAIKAN: Logika Sinyal yang Disederhanakan dan Lebih Efektif
+    # REFACTORED: Logika Sinyal Mean Reversion
     # =========================================================================
 
     # Filter 1: Konteks Tren Makro (Timeframe 1 Jam)
     # Kita hanya tertarik membeli koreksi jika tren besarnya masih naik.
-    macro_trend_is_up = (df['close'] > df['EMA_200_1h']) & (df['rsi_1h'] > 45)
+    if params.get("use_macro_trend_filter", True):
+        macro_trend_is_up = (df['close'] > df['EMA_200_1h'])
+    else:
+        macro_trend_is_up = pd.Series(True, index=df.index)
 
     # Filter 2: Kondisi Oversold di Timeframe Sinyal (5 Menit)
     # Harga harus menyentuh atau sedikit di bawah Lower Bollinger Band.
     price_is_oversold = df['low'] <= df[bb_lower_col]
     # RSI juga harus menunjukkan kondisi oversold.
-    rsi_is_oversold = df[rsi_col] < CONFIG.get("rsi_oversold", 35)
+    rsi_is_oversold = df[rsi_col] < params.get("rsi_oversold_threshold", 30)
 
     # Filter 3: Sinyal Konfirmasi Reversal
     # Kita mencari candle yang ditutup lebih tinggi dari pembukaannya (candle hijau).
     # Ini adalah konfirmasi paling sederhana bahwa tekanan beli mulai muncul.
     is_bullish_candle = df['close'] > df['open']
 
-    # --- Gabungkan Sinyal (Hanya Long) ---
-    long_signal = (
-        macro_trend_is_up &
-        price_is_oversold &
-        rsi_is_oversold &
-        is_bullish_candle
-    )
+    # --- BARU: Filter Konfirmasi Tambahan ---
+    # Filter 4: Volume harus di atas rata-rata untuk mengonfirmasi minat beli.
+    volume_confirmed = df['volume_ratio'] > params.get("min_volume_ratio", 1.2)
+
+    # Filter 5: Badan candle harus kuat untuk menunjukkan keyakinan.
+    if params.get("require_strong_candle_body", True):
+        # Menggunakan body_strength yang sudah dihitung di data_preparer
+        is_strong_body = df['body_strength'] > 0.6
+    else:
+        is_strong_body = pd.Series(True, index=df.index)
+
+
+    long_signal = macro_trend_is_up & price_is_oversold & rsi_is_oversold & is_bullish_candle & volume_confirmed & is_strong_body
 
     # Matikan sinyal short secara total untuk strategi ini.
     short_signal = pd.Series(False, index=df.index)
 
     # --- Exit Parameters ---
     exit_params = {
-        'sl_multiplier': params.get("sl_multiplier", 2.2),
-        'rr_ratio': 15.0, # Target utama jauh, partial TP akan dieksekusi lebih dulu.
+        'sl_multiplier': params.get("sl_multiplier", 2.5),
+        'rr_ratio': params.get("rr_ratio", 2.0),
         'partial_tps': params.get("partial_tps", []),
         'trailing': {
             "enabled": True,
-            "trigger_rr": params.get("trailing_trigger_rr", 3.0), # Trailing dimulai setelah 3R
-            "distance_atr": 3.0, # Jarak trailing standar
+            "trigger_rr": params.get("trailing_trigger_rr", 1.2),
+            "distance_atr": params.get("trailing_distance_atr", 1.8),
         }
     }
 
@@ -924,6 +934,74 @@ def signal_version_MomentumCrossHunter(df, symbol: str = None):
 
     return long_signal, short_signal, exit_params
 
+def signal_version_RSIDivergenceHunter(df, symbol: str = None):
+    """
+    NEW STRATEGY: RSI Divergence Momentum
+    - Tujuan: Menangkap pembalikan momentum (reversals) dari fake breakouts.
+    - Logic: Entry saat ada divergensi antara harga dan RSI, dikonfirmasi oleh kekuatan tren (ADX).
+    """
+    params = CONFIG.get("strategy_params", {}).get("RSIDivergenceHunter", {})
+
+    # --- PERBAIKAN: Tambahkan Market Regime Filter ---
+    if params.get("use_regime_filter", True):
+        # Asumsi: Data BTC sudah digabungkan ke dalam DataFrame utama oleh data_preparer
+        # Untuk backtester, ini perlu penyesuaian di `backtest_market_scanner.py`
+        # Untuk live trader, data BTC perlu di-fetch dan di-merge.
+        # Untuk saat ini, kita asumsikan kolom 'rsi_1h_BTC' ada.
+        if 'rsi_1h_BTC' in df.columns and df['rsi_1h_BTC'].iloc[-1] > params.get("regime_btc_rsi_threshold", 52):
+            return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {} # Matikan strategi jika market sedang bullish
+
+    # --- PERBAIKAN: Tambahkan filter blacklist simbol ---
+    if symbol and symbol in params.get("symbol_blacklist", []):
+        return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+
+    # --- Indikator & Kolom yang Dibutuhkan ---
+    adx_col = f"ADX_{CONFIG['atr_period']}"
+    required_cols = ['rsi_bearish_div', 'rsi_bullish_div', adx_col]
+    if params.get("use_macd_div_confirm", True):
+        required_cols.extend(['macd_bearish_div', 'macd_bullish_div'])
+
+    if any(col not in df.columns for col in required_cols):
+        return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+
+    # --- Sinyal Divergensi Dasar ---
+    base_long_signal = df['rsi_bullish_div']
+    base_short_signal = df['rsi_bearish_div']
+
+    # --- Filter & Konfirmasi ---
+    # 1. Konfirmasi Kekuatan Tren (ADX)
+    trend_is_strong = df[adx_col] > params.get("adx_threshold", 20)
+
+    # 2. (Opsional) Konfirmasi Divergensi MACD
+    if params.get("use_macd_div_confirm", True):
+        macd_confirm_long = df['macd_bullish_div']
+        macd_confirm_short = df['macd_bearish_div']
+    else:
+        macd_confirm_long = pd.Series(True, index=df.index)
+        macd_confirm_short = pd.Series(True, index=df.index)
+
+    # --- Gabungkan Sinyal ---
+    long_signal = base_long_signal & trend_is_strong & macd_confirm_long
+    short_signal = base_short_signal & trend_is_strong & macd_confirm_short
+
+    # --- Kontrol Arah ---
+    if not params.get("allow_long", True):
+        long_signal = pd.Series(False, index=df.index)
+    if not params.get("allow_short", True):
+        short_signal = pd.Series(False, index=df.index)
+
+    # --- Exit Parameters ---
+    exit_params = {
+        'sl_multiplier': params.get("sl_multiplier", 1.8),
+        'rr_ratio': params.get("rr_ratio", 2.2),
+        'trailing': {
+            "enabled": True,
+            "trigger_rr": params.get("trailing_trigger_rr", 1.5),
+            "distance_atr": params.get("trailing_distance_atr", 2.2),
+        }
+    }
+    return long_signal, short_signal, exit_params
+
 # =============================================================================
 # STRATEGY CONFIGURATION - OPTIMIZED WEIGHTS
 # =============================================================================
@@ -947,13 +1025,17 @@ STRATEGY_CONFIG = {
     #     "function": signal_version_MemecoinMoonshotHunter,
     #     "weight": 0.30 # Bobot lebih rendah, high-risk high-reward
     # },
-    # "LongOnlyCorrectionHunter": {
-    #     "function": signal_version_LongOnlyCorrectionHunter,
-    #     "weight": 0.40 # Bobot komplementer untuk menangkap koreksi
-    # },
+    "LongOnlyCorrectionHunter": {
+        "function": signal_version_LongOnlyCorrectionHunter,
+        "weight": 0.10 # Bobot komplementer untuk menangkap koreksi
+    },
     "MomentumCrossHunter": {
         "function": signal_version_MomentumCrossHunter,
-        "weight": 0.40 # PERBAIKAN: Bobot diturunkan karena sedang di-tuning ulang
+        "weight": 0.10 # PERBAIKAN: Bobot diturunkan karena sedang di-tuning ulang
+    },
+    "RSIDivergenceHunter": {
+        "function": signal_version_RSIDivergenceHunter,
+        "weight": 0.20 # Bobot sedang untuk strategi komplementer berkualitas tinggi
     },
     # "HybridScalper": {
     #     "function": signal_version_HYBRID_SCALPER,
