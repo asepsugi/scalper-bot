@@ -44,6 +44,9 @@ CONFIG = {
         "mta_rsi": True
     },
 
+    # --- PERBAIKAN: Parameter Eksekusi untuk Backtester ---
+    "limit_order_expiration_candles": 3, # Pastikan ini terbaca oleh engine backtest
+
     # =========================================================================
     # NEW: TWEAKABLE STRATEGY PARAMETERS
     # =========================================================================
@@ -91,10 +94,10 @@ CONFIG = {
             "candle_body_ratio": 0.58, # Dari backtest 18:39:49
             "anti_chase_pct": 0.08, # Maksimal naik 8%
             # --- BARU: Filter ADX yang dapat dikonfigurasi ---
-            "adx_veto_threshold": 15, # Filter momentum dump, hindari sideways chop
-            "sl_multiplier": 2.9,
-            "trailing_trigger_rr": 2.2,
-            "trailing_distance_atr": 3.2,
+            "adx_veto_threshold": 18, # Filter momentum dump, hindari sideways chop
+            "sl_multiplier": 2.2, # SANGAT KETAT: Dari 2.5 -> 2.2 ATR
+            "trailing_trigger_rr": 1.2, # SANGAT CEPAT: Mulai trailing di 1.2R (dari 1.5R)
+            "trailing_distance_atr": 1.5, # SANGAT KETAT: Jarak trailing dari 2.0 -> 1.5 ATR
             # --- BARU: Kontrol Arah Sinyal (sesuai MCH) ---
             "allow_long": True,             # Blokir sinyal long karena performa buruk
             "allow_short": True,             # Fokus pada kekuatan sinyal short
@@ -182,17 +185,17 @@ CONFIG = {
             "adx_threshold": 20,             # ADX must be > 20 to confirm trend strength
             "use_macd_div_confirm": True,    # Use MACD divergence as a second confirmation
             # --- BARU: Market Regime Filter ---
-            "use_regime_filter": False,      # NONAKTIFKAN SEMENTARA: Izinkan short bahkan saat BTC sedikit bullish
+            "use_regime_filter": True,      # NONAKTIFKAN SEMENTARA: Izinkan short bahkan saat BTC sedikit bullish
             "regime_btc_rsi_threshold": 52,  # Hanya aktifkan strategi jika RSI 1h BTC di bawah 52 (choppy/bearish)
 
             # --- Directional Control ---
             "allow_long": True,             # Focus on short signals for now
             "allow_short": True,
             # --- Exit Strategy ---
-            "sl_multiplier": 2.8,
-            "rr_ratio": 3.0, # Target utama, trailing akan mengambil alih
-            "trailing_trigger_rr": 1.5,      # BARU: Mulai trailing setelah 1.5R
-            "trailing_distance_atr": 2.2,    # BARU: Jarak trailing lebih ketat
+            "sl_multiplier": 2.0, # SANGAT KETAT: Dari 2.2 -> 2.0 ATR
+            "rr_ratio": 2.0, # SANGAT KETAT: Target realistis dari 2.5 -> 2.0R
+            "trailing_trigger_rr": 1.0,      # SANGAT CEPAT: Mulai trailing di breakeven (1.0R)
+            "trailing_distance_atr": 1.5,    # SANGAT KETAT: Jarak trailing lebih ketat
             # --- BARU: Blacklist untuk koin yang tidak cocok ---
             "symbol_blacklist": [
                 "TRUMPUSDT", "XLMUSDT", "PENGUUSDT", "HUSDT", "JELLYJELLYUSDT", "MYXUSDT", "MOODENGUSDT", "NEIROUSDT"
@@ -230,7 +233,7 @@ ENTRY_LOGIC = {
     "pullback_bb_retrace_pct": 0.002, # PERBAIKAN: Harga cukup retrace 0.2% dari band luar, membuatnya lebih sensitif
 
     # --- Parameter Eksekusi ---
-    "continuation_offset_pct": 0.0001, # Offset positif kecil untuk mengejar harga
+    "continuation_offset_pct": 0.002, # NAIKKAN: 0.2% untuk mengejar breakout agar fill rate tinggi
     "pullback_offset_pct": -0.0015,    # Offset negatif untuk menunggu pullback
     "default_offset_pct": 0.0,         # Tempatkan limit order tepat di harga sinyal
 
@@ -243,7 +246,7 @@ ENTRY_LOGIC = {
 
 LIVE_TRADING_CONFIG = {
     "max_symbols_to_trade": 20,  # DOWN from 30 (Symbol & Data Focus)
-    "max_active_positions_limit": 8, # BARU: Batas posisi aktif + order terbuka
+    "max_active_positions_limit": 20, # NAIKKAN: Agar tidak bottleneck saat backtest banyak sinyal
     
     "max_margin_usage_pct": 0.60,  # DOWN from 0.80 (more conservative)
     
@@ -329,7 +332,7 @@ SLIPPAGE = {
 EXECUTION = {
     "entry_order_type": "limit", # "limit" atau "market"
     "limit_order_offset_pct": 0.0005, # Offset untuk limit order (positif = sedikit mengejar harga)
-    "limit_order_expiration_candles": 15, # PERBAIKAN: Beri waktu 75 menit (15 candle * 5m) agar order lebih mungkin terisi
+    "limit_order_expiration_candles": 3, # PERCEPAT: Expire dalam 15 menit (3 candle) agar slot tidak macet
     "partial_tps": [
         (5.0, 0.5),   # 50% baru keluar di 5 RR
         (10.0, 0.3),  # 30% di 10 RR

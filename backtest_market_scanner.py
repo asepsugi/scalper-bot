@@ -8,7 +8,7 @@ import ccxt
 from rich.console import Console
 from pathlib import Path
 
-from config import CONFIG, LIVE_TRADING_CONFIG, API_KEYS, WHITELIST_ROTATION_CONFIG
+from config import CONFIG, LIVE_TRADING_CONFIG, API_KEYS, WHITELIST_ROTATION_CONFIG, EXECUTION
 from strategies import STRATEGY_CONFIG
 from utils.backtester_engine import PortfolioBacktester # REVISI: Impor engine backtesting
 from utils.common_utils import get_all_futures_symbols
@@ -261,16 +261,32 @@ async def run_scan(backtester, symbols, limit, start_date, end_date):
 
         # Proses exit/entry antara candle saat ini dan candle berikutnya
         backtester.check_trades_and_orders_fixed(current_time, next_time, all_data)
-        for signal in current_signals:
-            # --- BARU: Terapkan batasan total_exposure di backtester ---
-            # Perbaikan: Gunakan nama atribut yang benar (trades & orders) untuk backtester engine
-            active_trades = getattr(backtester, 'trades', [])
-            open_orders = getattr(backtester, 'orders', [])
-            current_exposure = len(active_trades) + len(open_orders)
-            if current_exposure >= max_pos:
-                # console.log(f"[grey50]Backtest Skip: Exposure limit ({max_pos}) reached. Skipping signal for {signal['symbol']}.[/grey50]")
-                continue # Lewati sinyal baru jika batas eksposur tercapai
-            backtester.process_new_signal(signal, all_data)
+
+        # --- REFACTOR: Logika "Available Slots" untuk mencegah over-exposure ---
+        # PERBAIKAN: Gunakan atribut yang benar dari engine: `active_positions` dan `pending_orders`
+        active_positions = backtester.active_positions
+        pending_orders = backtester.pending_orders
+        current_exposure = len(active_positions) + len(pending_orders)
+        available_slots = max_pos - current_exposure
+
+        if available_slots > 0 and current_signals:
+            # Hanya proses sinyal sebanyak slot yang tersedia
+            for signal in current_signals[:available_slots]:
+                backtester.process_new_signal(signal, all_data)
+        elif current_signals:
+            # Jika ada sinyal tapi tidak ada slot, log pesan skip sekali saja untuk efisiensi
+            console.log(f"[grey50]Backtest Skip: Exposure limit ({max_pos}) reached. Active Trades: {len(active_positions)}, Pending Orders: {len(pending_orders)}. Skipping {len(current_signals)} signal(s).[/grey50]")
+            
+            # --- DEBUG: Tampilkan sampel trade yang membuat macet ---
+            # Ini akan menjawab "Kenapa penuh?" dengan menunjukkan trade lama yang belum close.
+            if len(active_positions) > 0 and i % 50 == 0: # Tampilkan setiap 50 candle (sekitar 4 jam sekali) agar tidak spam
+                 console.log(f"[yellow]  ⚠️  STUCK TRADES SAMPLE ({len(active_positions)} total):[/yellow]")
+                 # PERBAIKAN: Iterasi melalui `items()` untuk mendapatkan simbol dan detail trade aktif
+                 for symbol, trade_details in list(active_positions.items())[:3]:
+                     entry_time = trade_details.get('entry_time')
+                     if entry_time:
+                         duration_mins = (current_time - entry_time).total_seconds() / 60
+                         console.log(f"     - {symbol} | Entry: {entry_time.strftime('%Y-%m-%d %H:%M')} | Dur: {duration_mins:.1f}m | SL: {trade_details.get('sl_price', 0):.4f}")
 
     backtester.close_remaining_trades(all_data)
 
@@ -385,6 +401,11 @@ async def main():
             if async_exchange:
                 await async_exchange.close()
                 console.log("Koneksi async sementara ditutup.")
+    
+    # --- PERBAIKAN: Pastikan parameter eksekusi masuk ke CONFIG backtester ---
+    if 'limit_order_expiration_candles' not in CONFIG:
+        CONFIG['limit_order_expiration_candles'] = EXECUTION.get('limit_order_expiration_candles', 3)
+
     backtester = PortfolioBacktester(initial_balance=CONFIG["account_balance"], simulate_latency=False)
 
     # --- PERBAIKAN: Inisialisasi ulang exchange sinkron untuk backtester ---

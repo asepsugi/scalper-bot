@@ -199,19 +199,21 @@ class LiveTrader:
                 symbol, df_5m = task['symbol'], task['data']
 
                 # --- Filter Batas Trade ---
-                # Hitung total eksposur: posisi aktif + order limit yang sedang dibuka
-                total_exposure = len(self.active_positions) + len(self.open_limit_orders)
+                # PERBAIKAN: Gunakan logika "Available Slots" untuk mencegah race condition
+                max_pos = LIVE_TRADING_CONFIG.get('max_active_positions_limit', 8)
+                current_exposure = len(self.active_positions) + len(self.open_limit_orders)
+                available_slots = max_pos - current_exposure
 
-                # Filter Baru: Batas trade harian
-                today_str = datetime.now().strftime('%Y-%m-%d')
-                trades_today = len([t for t in self.trades if t['Exit Time'].strftime('%Y-%m-%d') == today_str])
-                if trades_today >= LIVE_TRADING_CONFIG.get('max_trades_per_day', 999):
-                    console.log(f"[yellow]SKIP SIGNAL for {symbol}: Batas trade harian ({trades_today}) telah tercapai.[/yellow]")
+                if available_slots <= 0:
+                    # Tidak perlu log di sini karena akan terlalu berisik, cukup lewati
                     continue
                 
-                if total_exposure >= LIVE_TRADING_CONFIG.get('max_active_positions_limit', 8):
-                    console.log(f"[yellow]SKIP SIGNAL for {symbol}: Batas total eksposur ({total_exposure}) telah tercapai.[/yellow]")
-                    continue
+                # Filter Baru: Batas trade harian (opsional, bisa dinonaktifkan jika tidak perlu)
+                # today_str = datetime.now().strftime('%Y-%m-%d')
+                # trades_today = len([t for t in getattr(self, 'trades', []) if t.get('Exit Time', '').startswith(today_str)])
+                # if trades_today >= LIVE_TRADING_CONFIG.get('max_trades_per_day', 999):
+                #     # console.log(f"[yellow]SKIP SIGNAL for {symbol}: Batas trade harian ({trades_today}) telah tercapai.[/yellow]")
+                #     continue
                 
                 # --- PILAR 3: Cek Killswitch Pause ---
                 if self.weekly_killswitch_pause_until and datetime.now() < self.weekly_killswitch_pause_until:
@@ -691,14 +693,13 @@ class LiveTrader:
                             await self.log_event(f"EXIT_FILLED: Posisi {symbol} ditutup @ {filled_price}")
 
                     elif status in ['canceled', 'expired']:
+                        # PERBAIKAN: Gunakan .pop() yang aman untuk menghapus dari dictionary
                         # Hapus dari open_limit_orders jika dibatalkan/kedaluwarsa
-                        if symbol_ccxt in self.open_limit_orders.keys():
-                            self.open_limit_orders.remove(symbol_ccxt)
-
-                        msg = f"ℹ️ *Order Dibatalkan/Kedaluwarsa* untuk {symbol}"
-                        console.log(f"[yellow]{msg}[/yellow]")
-                        await notifier.send_message(msg)
-                        await self.log_event(f"ORDER_CANCEL: Order untuk {symbol} dibatalkan/kedaluwarsa.")
+                        if self.open_limit_orders.pop(symbol_ccxt, None):
+                            msg = f"ℹ️ *Order Dibatalkan/Kedaluwarsa* untuk {symbol}"
+                            console.log(f"[yellow]{msg}[/yellow]")
+                            await notifier.send_message(msg)
+                            await self.log_event(f"ORDER_CANCEL: Order untuk {symbol} dibatalkan/kedaluwarsa.")
 
             except asyncio.CancelledError:
                 raise # Pastikan pembatalan bisa menghentikan loop
