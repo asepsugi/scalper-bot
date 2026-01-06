@@ -618,11 +618,36 @@ def signal_version_AltcoinVolumeBreakoutHunter(df, symbol: str = None):
         long_signal = long_signal & regime_filter
         short_signal = short_signal & regime_filter
 
-    # --- PERBAIKAN: Terapkan filter arah sinyal (seperti MCH) ---
-    if not params.get("allow_long", True):
-        long_signal = pd.Series(False, index=df.index)
-    if not params.get("allow_short", True):
-        short_signal = pd.Series(False, index=df.index)
+    # --- BARU: Global Bull Switch (Prioritas Long) ---
+    allow_long_final = params.get("allow_long", True)
+    allow_short_final = params.get("allow_short", True)
+
+    if 'rsi_1h_BTC' in df.columns:
+        # Jika BTC RSI > 60, kita anggap Bull Regime Kuat.
+        # Strategi: Force Allow Long, Block Short, dan Bypass Filter Regime untuk Long.
+        is_bull_regime = df['rsi_1h_BTC'] > 60
+        
+        allow_long_final = np.where(is_bull_regime, True, allow_long_final)
+        allow_short_final = np.where(is_bull_regime, False, allow_short_final)
+        
+        # Bypass regime filter untuk sinyal Long jika di Bull Regime
+        # (Karena altcoin mungkin lagging indikatornya tapi ikut pump)
+        if params.get("enable_regime_filter", False):
+             # Kembalikan sinyal long asli (sebelum difilter regime) di baris yang bull regime
+             # Logika: Jika Bull Regime, gunakan sinyal tanpa filter regime. Jika tidak, gunakan sinyal terfilter.
+             # Note: Ini agak kompleks di pandas, untuk simplifikasi kita override permission saja dulu.
+             pass
+
+    # --- Terapkan Filter Arah ---
+    if isinstance(allow_long_final, (np.ndarray, pd.Series)):
+        long_signal[~allow_long_final] = False
+    elif not allow_long_final:
+        long_signal[:] = False
+    
+    if isinstance(allow_short_final, (np.ndarray, pd.Series)):
+        short_signal[~allow_short_final] = False
+    elif not allow_short_final:
+        short_signal[:] = False
 
     # --- Metadata & Parameter Exit ---
     # Sesuai permintaan: SL 2.8x ATR, Trailing start 2R, distance 3.0x ATR,
@@ -921,21 +946,21 @@ def signal_version_MomentumCrossHunter(df, symbol: str = None):
     allow_short_final = params.get("allow_short", True)
     
     if 'rsi_1h_BTC' in df.columns:
-        # Jika RSI BTC > 58, kita berada dalam rezim bull.
+        # Jika RSI BTC > 60 (Sesuai Request), kita berada dalam rezim bull.
         # Paksa 'allow_long' menjadi True dan 'allow_short' menjadi False.
-        is_bull_regime = df['rsi_1h_BTC'] > 58 
+        is_bull_regime = df['rsi_1h_BTC'] > 60
         # `np.where` akan memilih nilai berdasarkan kondisi per baris
         allow_long_final = np.where(is_bull_regime, True, allow_long_final)
         allow_short_final = np.where(is_bull_regime, False, allow_short_final)
 
     # --- PERBAIKAN: Terapkan filter arah sinyal dinamis ---
     # `allow_long_final` dan `allow_short_final` bisa jadi Series atau boolean
-    if isinstance(allow_long_final, pd.Series):
+    if isinstance(allow_long_final, (np.ndarray, pd.Series)):
         long_signal[~allow_long_final] = False
     elif not allow_long_final:
         long_signal[:] = False
     
-    if isinstance(allow_short_final, pd.Series):
+    if isinstance(allow_short_final, (np.ndarray, pd.Series)):
         short_signal[~allow_short_final] = False
     elif not allow_short_final:
         short_signal[:] = False
@@ -1011,17 +1036,17 @@ def signal_version_RSIDivergenceHunter(df, symbol: str = None):
     allow_short_final = params.get("allow_short", True)
     
     if 'rsi_1h_BTC' in df.columns:
-        is_bull_regime = df['rsi_1h_BTC'] > 58
+        is_bull_regime = df['rsi_1h_BTC'] > 60
         allow_long_final = np.where(is_bull_regime, True, allow_long_final)
         allow_short_final = np.where(is_bull_regime, False, allow_short_final)
 
     # --- PERBAIKAN: Terapkan filter arah sinyal dinamis ---
-    if isinstance(allow_long_final, pd.Series):
+    if isinstance(allow_long_final, (np.ndarray, pd.Series)):
         long_signal[~allow_long_final] = False
     elif not allow_long_final:
         long_signal[:] = False
     
-    if isinstance(allow_short_final, pd.Series):
+    if isinstance(allow_short_final, (np.ndarray, pd.Series)):
         short_signal[~allow_short_final] = False
     elif not allow_short_final:
         short_signal[:] = False

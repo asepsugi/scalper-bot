@@ -33,6 +33,20 @@ async def run_scan(backtester, symbols, limit, start_date, end_date):
     
     loop = asyncio.get_event_loop()
 
+    # --- BARU: Ambil Konteks Global BTC untuk Deteksi Rezim ---
+    console.log("[bold yellow]Fetching Global BTC Context (Regime Detection)...[/bold yellow]")
+    btc_result = await loop.run_in_executor(None, backtester.fetch_and_prepare_symbol_data, 'BTC/USDT', limit, start_date, end_date)
+    btc_context = None
+    if btc_result and btc_result[0] is not None and not btc_result[0].empty:
+        btc_df = btc_result[0]
+        # Ambil kolom penting saja untuk menghemat memori
+        cols_to_keep = ['rsi_1h', 'close']
+        # Pastikan kolom ada sebelum mengambil
+        cols_to_keep = [c for c in cols_to_keep if c in btc_df.columns]
+        btc_context = btc_df[cols_to_keep].copy()
+        btc_context.rename(columns={c: c + '_BTC' for c in btc_context.columns}, inplace=True)
+        console.log(f"Global BTC Context Loaded. Rows: {len(btc_context)}")
+
     # --- PERBAIKAN KRUSIAL: Proses data dalam batch untuk menghindari API ban ---
     batch_size = 5  # Proses 5 simbol sekaligus, ini jauh lebih aman dari 50.
     all_results = []
@@ -77,6 +91,12 @@ async def run_scan(backtester, symbols, limit, start_date, end_date):
     # Proses hasil yang sudah dikumpulkan
     for symbol, (result_df, from_cache) in all_results:
         if result_df is not None and not result_df.empty:
+            # --- BARU: Suntikkan Data BTC ke Simbol Altcoin ---
+            if btc_context is not None and symbol != 'BTC/USDT':
+                # Left join untuk mempertahankan index altcoin, ffill untuk mengisi gap
+                result_df = result_df.join(btc_context, how='left')
+                result_df.ffill(inplace=True)
+            
             all_data[symbol] = result_df
             console.log(f"({i+1}/{len(symbols)}) Successfully processed [bold cyan]{symbol}[/bold cyan] (from cache: {from_cache})")
         else:

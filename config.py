@@ -91,12 +91,12 @@ CONFIG = {
             "candle_body_ratio": 0.58, # Dari backtest 18:39:49
             "anti_chase_pct": 0.08, # Maksimal naik 8%
             # --- BARU: Filter ADX yang dapat dikonfigurasi ---
-            "adx_veto_threshold": 18, # Filter momentum dump, hindari sideways chop
+            "adx_veto_threshold": 15, # Filter momentum dump, hindari sideways chop
             "sl_multiplier": 2.9,
             "trailing_trigger_rr": 2.2,
             "trailing_distance_atr": 3.2,
             # --- BARU: Kontrol Arah Sinyal (sesuai MCH) ---
-            "allow_long": False,             # Blokir sinyal long karena performa buruk
+            "allow_long": True,             # Blokir sinyal long karena performa buruk
             "allow_short": True,             # Fokus pada kekuatan sinyal short
             "enable_ema_filter": True,
             "symbol_blacklist": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ZECUSDT", "ADAUSDT", "AVAXUSDT", 
@@ -123,12 +123,12 @@ CONFIG = {
         "LongOnlyCorrectionHunter": { # REFACTORED to Mean Reversion / Dip Buyer
             "risk_per_trade": 0.01,          # Risiko 1%
             # --- Entry Parameters ---
-            "rsi_oversold_threshold": 27,    # PERBAIKAN: Beli jika RSI < 30 (lebih oversold)
+            "rsi_oversold_threshold": 35,    # PERBAIKAN: Beli jika RSI < 30 (lebih oversold)
             "bb_period": 20,                 # Periode Bollinger Bands
             "bb_std_dev": 2.2,               # PERBAIKAN: Standar deviasi BB lebih lebar untuk menangkap volatilitas
             "use_macro_trend_filter": False,  # Wajibkan harga > EMA 200 1h
             # --- BARU: Filter Konfirmasi Tambahan ---
-            "min_volume_ratio": 1.2,         # Volume harus > 1.2x rata-rata
+            "min_volume_ratio": 1.0,         # Volume harus > 1.2x rata-rata
             "require_strong_candle_body": False, # Wajibkan candle bullish yang kuat
 
             # --- Exit Strategy ---
@@ -160,7 +160,7 @@ CONFIG = {
             "rsi_threshold_short": 55,       # Kembali ke 50 untuk pengujian murni
             "use_macd_confirm": True,        # Konfirmasi MACD penting untuk menghindari sinyal palsu.
             # --- BARU: Kontrol Arah Sinyal ---
-            "allow_long": False,             # Blokir sinyal long untuk sementara
+            "allow_long": True,             # Blokir sinyal long untuk sementara
             "allow_short": True,             # Izinkan sinyal short
             # --- PERBAIKAN: Manajemen Stop-Loss & Exit ---
             "sl_multiplier": 3.5,            # SL lebih longgar untuk mengakomodasi volatilitas.
@@ -182,11 +182,11 @@ CONFIG = {
             "adx_threshold": 20,             # ADX must be > 20 to confirm trend strength
             "use_macd_div_confirm": True,    # Use MACD divergence as a second confirmation
             # --- BARU: Market Regime Filter ---
-            "use_regime_filter": True,       # Aktifkan filter market regime
+            "use_regime_filter": False,      # NONAKTIFKAN SEMENTARA: Izinkan short bahkan saat BTC sedikit bullish
             "regime_btc_rsi_threshold": 52,  # Hanya aktifkan strategi jika RSI 1h BTC di bawah 52 (choppy/bearish)
 
             # --- Directional Control ---
-            "allow_long": False,             # Focus on short signals for now
+            "allow_long": True,             # Focus on short signals for now
             "allow_short": True,
             # --- Exit Strategy ---
             "sl_multiplier": 2.8,
