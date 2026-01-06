@@ -208,8 +208,8 @@ class LiveTrader:
                 if trades_today >= LIVE_TRADING_CONFIG.get('max_trades_per_day', 999):
                     console.log(f"[yellow]SKIP SIGNAL for {symbol}: Batas trade harian ({trades_today}) telah tercapai.[/yellow]")
                     continue
-
-                if total_exposure >= LIVE_TRADING_CONFIG.get('max_active_positions_limit', 10): # Gunakan batas statis sementara
+                
+                if total_exposure >= LIVE_TRADING_CONFIG.get('max_active_positions_limit', 8):
                     console.log(f"[yellow]SKIP SIGNAL for {symbol}: Batas total eksposur ({total_exposure}) telah tercapai.[/yellow]")
                     continue
                 

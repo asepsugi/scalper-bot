@@ -84,7 +84,7 @@ CONFIG = {
             "debug_mode": False  # Log kenapa sinyal None
         },
         "AltcoinVolumeBreakoutHunter": {
-            "risk_per_trade": 0.028, # Risiko 2.5% untuk strategi breakout yang lebih agresif
+            "risk_per_trade": 0.010, # Risiko 2.0% untuk strategi breakout yang lebih agresif
             # --- PERBAIKAN: Terapkan parameter terbaik dari hasil backtest ---
             "breakout_window": 12,
             "volume_spike_multiplier": 3.8, # Dari backtest 18:39:49 (PF 3.83)
@@ -123,13 +123,13 @@ CONFIG = {
         "LongOnlyCorrectionHunter": { # REFACTORED to Mean Reversion / Dip Buyer
             "risk_per_trade": 0.01,          # Risiko 1%
             # --- Entry Parameters ---
-            "rsi_oversold_threshold": 30,    # PERBAIKAN: Beli jika RSI < 30 (lebih oversold)
+            "rsi_oversold_threshold": 27,    # PERBAIKAN: Beli jika RSI < 30 (lebih oversold)
             "bb_period": 20,                 # Periode Bollinger Bands
             "bb_std_dev": 2.2,               # PERBAIKAN: Standar deviasi BB lebih lebar untuk menangkap volatilitas
             "use_macro_trend_filter": False,  # Wajibkan harga > EMA 200 1h
             # --- BARU: Filter Konfirmasi Tambahan ---
             "min_volume_ratio": 1.2,         # Volume harus > 1.2x rata-rata
-            "require_strong_candle_body": True, # Wajibkan candle bullish yang kuat
+            "require_strong_candle_body": False, # Wajibkan candle bullish yang kuat
 
             # --- Exit Strategy ---
             "sl_multiplier": 2.5,            # PERBAIKAN: Beri ruang lebih untuk SL
@@ -142,7 +142,7 @@ CONFIG = {
             "trailing_distance_atr": 1.8     # BARU: Jarak trailing lebih ketat
         },
         "MomentumCrossHunter": {
-            "risk_per_trade": 0.012,
+            "risk_per_trade": 0.010,
             # --- PERBAIKAN: Filter Entry yang Diperketat ---
             # --- BARU: Mode Extreme Test ---
             "extreme_test_mode": False,      # PASTIKAN SELALU False untuk backtest serius.
@@ -177,7 +177,7 @@ CONFIG = {
             ]
         },
         "RSIDivergenceHunter": {
-            "risk_per_trade": 0.015,
+            "risk_per_trade": 0.010,
             # --- Entry Parameters ---
             "adx_threshold": 20,             # ADX must be > 20 to confirm trend strength
             "use_macd_div_confirm": True,    # Use MACD divergence as a second confirmation
@@ -243,6 +243,7 @@ ENTRY_LOGIC = {
 
 LIVE_TRADING_CONFIG = {
     "max_symbols_to_trade": 20,  # DOWN from 30 (Symbol & Data Focus)
+    "max_active_positions_limit": 8, # BARU: Batas posisi aktif + order terbuka
     
     "max_margin_usage_pct": 0.60,  # DOWN from 0.80 (more conservative)
     

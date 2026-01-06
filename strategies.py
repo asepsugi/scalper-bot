@@ -534,6 +534,7 @@ def signal_version_AltcoinVolumeBreakoutHunter(df, symbol: str = None):
     # --- BARU: Tambahkan ADX(14) ke kolom yang dibutuhkan ---
     adx_14_col = "ADX_14"
     required_cols = ['high', 'low', 'close', 'open', 'volume', atr_col, vol_ma_col, adx_14_col]
+    required_cols.extend(['DMP_14', 'DMN_14']) # Tambahkan untuk DI filter
 
     # Validasi data
     if any(col not in df.columns for col in required_cols):
@@ -591,7 +592,11 @@ def signal_version_AltcoinVolumeBreakoutHunter(df, symbol: str = None):
     # Sinyal hanya valid jika ada momentum dump yang terkonfirmasi.
     momentum_confirmed = df[adx_14_col] > adx_veto_threshold
 
-    # 5. (BARU) Filter Tren EMA
+    # 6. (BARU) Filter Arah DI
+    # Hanya izinkan short jika -DI > +DI (momentum bearish)
+    di_confirm_short = df['DMN_14'] > df['DMP_14']
+
+    # 7. (BARU) Filter Tren EMA
     # Memastikan breakout searah dengan tren jangka pendek untuk meningkatkan win rate.
     if params.get("enable_ema_filter", False):
         ema_col = f"EMA_{CONFIG['ema_period']}"
@@ -606,7 +611,7 @@ def signal_version_AltcoinVolumeBreakoutHunter(df, symbol: str = None):
 
     # --- Gabungkan Sinyal ---
     long_signal = volume_spike & breakout_long & is_strong_candle & not_chasing_price & momentum_confirmed & with_trend
-    short_signal = volume_spike & breakout_short & is_strong_candle & not_chasing_price & momentum_confirmed & against_trend
+    short_signal = volume_spike & breakout_short & is_strong_candle & not_chasing_price & momentum_confirmed & against_trend & di_confirm_short
 
     # Terapkan Market Regime Filter jika aktif
     if params.get("enable_regime_filter", False):
@@ -911,12 +916,29 @@ def signal_version_MomentumCrossHunter(df, symbol: str = None):
         short_signal = (cross_down_event & below_long_term_trend & rsi_confirm_short & macd_confirm_short &
                         short_htf_ok & trend_is_strong_enough & short_di_ok & volatility_ok)
 
-    # --- PERBAIKAN: Terapkan filter arah sinyal ---
-    if not params.get("allow_long", True):
-        long_signal = pd.Series(False, index=df.index)
-    if not params.get("allow_short", True):
-        short_signal = pd.Series(False, index=df.index)
+    # --- BARU: Logika Adaptif Berdasarkan Rezim BTC ---
+    allow_long_final = params.get("allow_long", True)
+    allow_short_final = params.get("allow_short", True)
+    
+    if 'rsi_1h_BTC' in df.columns:
+        # Jika RSI BTC > 58, kita berada dalam rezim bull.
+        # Paksa 'allow_long' menjadi True dan 'allow_short' menjadi False.
+        is_bull_regime = df['rsi_1h_BTC'] > 58 
+        # `np.where` akan memilih nilai berdasarkan kondisi per baris
+        allow_long_final = np.where(is_bull_regime, True, allow_long_final)
+        allow_short_final = np.where(is_bull_regime, False, allow_short_final)
 
+    # --- PERBAIKAN: Terapkan filter arah sinyal dinamis ---
+    # `allow_long_final` dan `allow_short_final` bisa jadi Series atau boolean
+    if isinstance(allow_long_final, pd.Series):
+        long_signal[~allow_long_final] = False
+    elif not allow_long_final:
+        long_signal[:] = False
+    
+    if isinstance(allow_short_final, pd.Series):
+        short_signal[~allow_short_final] = False
+    elif not allow_short_final:
+        short_signal[:] = False
 
     # --- Exit Parameters ---
     # Menggunakan parameter yang sudah dioptimalkan sesuai analisis.
@@ -984,12 +1006,26 @@ def signal_version_RSIDivergenceHunter(df, symbol: str = None):
     long_signal = base_long_signal & trend_is_strong & macd_confirm_long
     short_signal = base_short_signal & trend_is_strong & macd_confirm_short
 
-    # --- Kontrol Arah ---
-    if not params.get("allow_long", True):
-        long_signal = pd.Series(False, index=df.index)
-    if not params.get("allow_short", True):
-        short_signal = pd.Series(False, index=df.index)
+    # --- BARU: Logika Adaptif Berdasarkan Rezim BTC ---
+    allow_long_final = params.get("allow_long", True)
+    allow_short_final = params.get("allow_short", True)
+    
+    if 'rsi_1h_BTC' in df.columns:
+        is_bull_regime = df['rsi_1h_BTC'] > 58
+        allow_long_final = np.where(is_bull_regime, True, allow_long_final)
+        allow_short_final = np.where(is_bull_regime, False, allow_short_final)
 
+    # --- PERBAIKAN: Terapkan filter arah sinyal dinamis ---
+    if isinstance(allow_long_final, pd.Series):
+        long_signal[~allow_long_final] = False
+    elif not allow_long_final:
+        long_signal[:] = False
+    
+    if isinstance(allow_short_final, pd.Series):
+        short_signal[~allow_short_final] = False
+    elif not allow_short_final:
+        short_signal[:] = False
+        
     # --- Exit Parameters ---
     exit_params = {
         'sl_multiplier': params.get("sl_multiplier", 1.8),
@@ -1019,7 +1055,7 @@ STRATEGY_CONFIG = {
     # },
     "AltcoinVolumeBreakoutHunter": {
         "function": signal_version_AltcoinVolumeBreakoutHunter,
-        "weight": 0.60 # Bobot utama untuk momentum
+        "weight": 0.50 # Bobot utama untuk momentum
     },
     # "MemecoinMoonshotHunter": {
     #     "function": signal_version_MemecoinMoonshotHunter,
@@ -1031,11 +1067,11 @@ STRATEGY_CONFIG = {
     },
     "MomentumCrossHunter": {
         "function": signal_version_MomentumCrossHunter,
-        "weight": 0.10 # PERBAIKAN: Bobot diturunkan karena sedang di-tuning ulang
+        "weight": 0.15 # PERBAIKAN: Bobot diturunkan karena sedang di-tuning ulang
     },
     "RSIDivergenceHunter": {
         "function": signal_version_RSIDivergenceHunter,
-        "weight": 0.20 # Bobot sedang untuk strategi komplementer berkualitas tinggi
+        "weight": 0.25 # Bobot sedang untuk strategi komplementer berkualitas tinggi
     },
     # "HybridScalper": {
     #     "function": signal_version_HYBRID_SCALPER,

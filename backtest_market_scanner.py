@@ -15,8 +15,10 @@ from utils.common_utils import get_all_futures_symbols
 
 console = Console()
 # --- PERBAIKAN: Definisikan direktori cache di sini ---
-CACHE_DIR = Path("cache")
+CACHE_DIR = Path(__file__).parent / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
+OUTPUT_DIR = Path(__file__).parent / "output"
+OUTPUT_DIR.mkdir(exist_ok=True)
 
 async def run_scan(backtester, symbols, limit, start_date, end_date):
     """
@@ -221,6 +223,9 @@ async def run_scan(backtester, symbols, limit, start_date, end_date):
     # 2. Lakukan iterasi dari satu timestamp sinyal ke timestamp sinyal berikutnya
     # PERBAIKAN: Hapus progress bar (track) untuk membuat log lebih bersih
     for i in range(len(all_timestamps) - 1):
+        # --- BARU: Ambil batas posisi dari config ---
+        max_pos = LIVE_TRADING_CONFIG.get('max_active_positions_limit', 8)
+
         current_time = all_timestamps[i]
         next_time = all_timestamps[i+1]
         
@@ -237,9 +242,94 @@ async def run_scan(backtester, symbols, limit, start_date, end_date):
         # Proses exit/entry antara candle saat ini dan candle berikutnya
         backtester.check_trades_and_orders_fixed(current_time, next_time, all_data)
         for signal in current_signals:
+            # --- BARU: Terapkan batasan total_exposure di backtester ---
+            # Perbaikan: Gunakan nama atribut yang benar (trades & orders) untuk backtester engine
+            active_trades = getattr(backtester, 'trades', [])
+            open_orders = getattr(backtester, 'orders', [])
+            current_exposure = len(active_trades) + len(open_orders)
+            if current_exposure >= max_pos:
+                # console.log(f"[grey50]Backtest Skip: Exposure limit ({max_pos}) reached. Skipping signal for {signal['symbol']}.[/grey50]")
+                continue # Lewati sinyal baru jika batas eksposur tercapai
             backtester.process_new_signal(signal, all_data)
 
     backtester.close_remaining_trades(all_data)
+
+def save_detailed_csv(backtester, filename="market_scan_results.csv"):
+    """
+    Menyimpan hasil backtest ke CSV dengan format kolom spesifik yang diminta user.
+    File akan disimpan di dalam folder 'output'.
+    """
+    if not hasattr(backtester, 'closed_trades') or not backtester.closed_trades:
+        console.log("[yellow]Tidak ada trade yang ditutup, file CSV tidak dibuat.[/yellow]")
+        return
+
+    filepath = OUTPUT_DIR / filename
+    df = pd.DataFrame(backtester.closed_trades)
+
+    # 1. Hitung Risk Per Trade Pct (dari config)
+    try:
+        def get_risk_pct(strategy_name):
+            return CONFIG.get("strategy_params", {}).get(strategy_name, {}).get("risk_per_trade", np.nan)
+        
+        if 'strategy' in df.columns:
+            df['risk_per_trade_pct'] = df['strategy'].apply(get_risk_pct)
+        else:
+            df['risk_per_trade_pct'] = np.nan
+    except Exception as e:
+        console.log(f"[yellow]Peringatan: Gagal menghitung 'risk_per_trade_pct'. Error: {e}[/yellow]")
+        df['risk_per_trade_pct'] = np.nan
+
+    # 2. Hitung Trade Size (Notional Value in USDT)
+    try:
+        if 'size' in df.columns and 'entry_price' in df.columns:
+            df['trade_size_quote'] = df['size'] * df['entry_price']
+        else:
+            df['trade_size_quote'] = 0.0
+    except Exception as e:
+        console.log(f"[yellow]Peringatan: Gagal menghitung 'trade_size_quote'. Error: {e}[/yellow]")
+        df['trade_size_quote'] = 0.0
+
+    # 3. Buat ID
+    df.insert(0, 'ID', range(1, len(df) + 1))
+
+    # 4. Mapping nama kolom sesuai request
+    # ID,Symbol,Strategy,Direction,Trade Size,Risk Per Trade Pct,Entry Time,Exit Time,PnL (USD),Balance,Exit Reason
+    
+    # Pastikan kolom Balance menggunakan balance_at_exit
+    if 'balance_at_exit' in df.columns:
+        df['Balance'] = df['balance_at_exit']
+    else:
+        df['Balance'] = np.nan
+
+    rename_map = {
+        'symbol': 'Symbol',
+        'strategy': 'Strategy',
+        'side': 'Direction',
+        'trade_size_quote': 'Trade Size',
+        'risk_per_trade_pct': 'Risk Per Trade Pct',
+        'entry_time': 'Entry Time',
+        'exit_time': 'Exit Time',
+        'pnl': 'PnL (USD)',
+        'exit_reason': 'Exit Reason'
+    }
+    
+    df = df.rename(columns=rename_map)
+
+    # 5. Pilih dan urutkan kolom
+    target_columns = [
+        'ID', 'Symbol', 'Strategy', 'Direction', 'Trade Size', 
+        'Risk Per Trade Pct', 'Entry Time', 'Exit Time', 
+        'PnL (USD)', 'Balance', 'Exit Reason'
+    ]
+    
+    # Filter hanya kolom yang ada (untuk safety, meski kita sudah buat)
+    final_columns = [col for col in target_columns if col in df.columns]
+    
+    df_final = df[final_columns]
+
+    df_final.to_csv(filepath, index=False, float_format='%.4f')
+    console.log(f"[bold green]Detailed trade log saved to {filepath}[/bold green]")
+
 
 async def main():
     parser = argparse.ArgumentParser(description="Binance Futures Market Scanner Backtester")
@@ -323,6 +413,7 @@ async def main():
     await run_scan(backtester, symbols=symbols_to_scan, limit=args.limit, start_date=args.start_date, end_date=args.end_date)
     backtester.get_results(args=args)
     backtester.get_results_with_realism_report(args=args)
+    save_detailed_csv(backtester)
 
 if __name__ == "__main__":
     asyncio.run(main())
