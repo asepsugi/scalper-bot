@@ -48,7 +48,7 @@ async def run_scan(backtester, symbols, limit, start_date, end_date):
         console.log(f"Global BTC Context Loaded. Rows: {len(btc_context)}")
 
     # --- PERBAIKAN KRUSIAL: Proses data dalam batch untuk menghindari API ban ---
-    batch_size = 5  # Proses 5 simbol sekaligus, ini jauh lebih aman dari 50.
+    batch_size = 2  # TURUNKAN: Dari 5 ke 2 untuk menghindari 429 Too Many Requests
     all_results = []
     for i in range(0, len(symbols), batch_size):
         batch_symbols = symbols[i:i + batch_size]
@@ -85,11 +85,11 @@ async def run_scan(backtester, symbols, limit, start_date, end_date):
         all_results.extend(batch_results)
         
         # Jeda singkat antar batch untuk lebih menghormati rate limit
-        console.log("[grey50]Pausing for 2 seconds between batches...[/grey50]")
-        await asyncio.sleep(2)
+        console.log("[grey50]Pausing for 5 seconds between batches...[/grey50]")
+        await asyncio.sleep(5)
 
     # Proses hasil yang sudah dikumpulkan
-    for symbol, (result_df, from_cache) in all_results:
+    for idx, (symbol, (result_df, from_cache)) in enumerate(all_results):
         if result_df is not None and not result_df.empty:
             # --- BARU: Suntikkan Data BTC ke Simbol Altcoin ---
             if btc_context is not None and symbol != 'BTC/USDT':
@@ -98,9 +98,9 @@ async def run_scan(backtester, symbols, limit, start_date, end_date):
                 result_df.ffill(inplace=True)
             
             all_data[symbol] = result_df
-            console.log(f"({i+1}/{len(symbols)}) Successfully processed [bold cyan]{symbol}[/bold cyan] (from cache: {from_cache})")
+            console.log(f"({idx+1}/{len(symbols)}) Successfully processed [bold cyan]{symbol}[/bold cyan] (from cache: {from_cache})")
         else:
-            console.log(f"({i+1}/{len(symbols)}) [yellow]Skipping {symbol} due to data issues.[/yellow]")
+            console.log(f"({idx+1}/{len(symbols)}) [yellow]Skipping {symbol} due to data issues.[/yellow]")
 
     if not all_data:
         console.log("[bold red]Failed to prepare data for any symbol. Exiting.[/bold red]")
@@ -149,7 +149,9 @@ async def run_scan(backtester, symbols, limit, start_date, end_date):
                     scores.append({'symbol': symbol, 'score': score})
             
             sorted_scores = sorted(scores, key=lambda x: x['score'], reverse=True)
-            weekly_whitelists[week_start_date.week] = {item['symbol'] for item in sorted_scores[:WHITELIST_ROTATION_CONFIG.get("top_n_coins", 20)]}
+            # PERBAIKAN BUG 3: Gunakan (Tahun, Minggu) sebagai key untuk menghindari tabrakan lintas tahun
+            iso_cal = week_start_date.isocalendar()
+            weekly_whitelists[(iso_cal.year, iso_cal.week)] = {item['symbol'] for item in sorted_scores[:WHITELIST_ROTATION_CONFIG.get("top_n_coins", 20)]}
         backtester.set_weekly_whitelists(weekly_whitelists) # Kirim data whitelist ke backtester untuk logging
 
     console.log("\nGenerating signals from prepared data...")
@@ -210,8 +212,9 @@ async def run_scan(backtester, symbols, limit, start_date, end_date):
             # --- PILAR 2: Filter sinyal berdasarkan whitelist mingguan ---
             if WHITELIST_ROTATION_CONFIG.get("enabled", False) and weekly_whitelists:
                 def is_in_whitelist(row):
-                    week_of_year = row.name.week # PERBAIKAN: Akses timestamp dari nama indeks baris
-                    whitelist_for_week = weekly_whitelists.get(week_of_year, set())
+                    # PERBAIKAN BUG 3: Gunakan ISO calendar yang konsisten dengan key generation
+                    iso_cal = row.name.isocalendar()
+                    whitelist_for_week = weekly_whitelists.get((iso_cal.year, iso_cal.week), set())
                     return row['symbol'] in whitelist_for_week
                 
                 signals_df = signals_df[signals_df.apply(is_in_whitelist, axis=1)]

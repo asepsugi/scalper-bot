@@ -1,6 +1,7 @@
 import pandas as pd
 import pandas_ta as ta
 import ccxt
+import time # Tambahkan import time
 from pathlib import Path
 import ccxt.pro as ccxtpro_base # Import ccxt.pro base class for type checking
 import pickle
@@ -160,6 +161,7 @@ def fetch_binance_data_sync(exchange, symbol, timeframe, limit=None, start_date=
                     break
                 all_ohlcv.extend(ohlcv)
                 since = ohlcv[-1][0] + 1 # Pindah ke candle berikutnya
+                time.sleep(0.2) # Tambahkan jeda 200ms per request pagination untuk mencegah 429
         elif limit:
             # Mode limit (perilaku lama)
             since = exchange.milliseconds() - limit * timeframe_duration_in_ms

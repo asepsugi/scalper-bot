@@ -82,6 +82,7 @@ def determine_entry_profile(df_row):
             'profile': 'CONTINUATION (Forced)',
             'offset_pct': ENTRY_LOGIC['continuation_offset_pct'],
             'risk_multiplier': ENTRY_LOGIC['continuation_risk_multiplier'],
+            'risk_pct': 0.01,   # BUGFIX
             'order_type': order_type
         }
 
@@ -111,6 +112,7 @@ def determine_entry_profile(df_row):
             'profile': 'CONTINUATION',
             'offset_pct': ENTRY_LOGIC['continuation_offset_pct'],
             'risk_multiplier': ENTRY_LOGIC['continuation_risk_multiplier'],
+            'risk_pct': 0.01,   # BUGFIX
             'order_type': order_type
         }
 
@@ -143,6 +145,7 @@ def determine_entry_profile(df_row):
             'profile': 'PULLBACK_BULL',
             'offset_pct': ENTRY_LOGIC['pullback_offset_pct'],
             'risk_multiplier': ENTRY_LOGIC['pullback_risk_multiplier'],
+            'risk_pct': 0.01,   # BUGFIX
             'order_type': 'limit'
         }
 
@@ -152,6 +155,7 @@ def determine_entry_profile(df_row):
             'profile': 'PULLBACK_BEAR',
             'offset_pct': ENTRY_LOGIC['pullback_offset_pct'],
             'risk_multiplier': ENTRY_LOGIC['pullback_risk_multiplier'],
+            'risk_pct': 0.01,   # BUGFIX
             'order_type': 'limit'
         }
 
@@ -159,10 +163,11 @@ def determine_entry_profile(df_row):
     # Jika tidak ada profil agresif (continuation/pullback) yang cocok, gunakan profil default.
     # Ini bisa berupa market order atau limit order yang sabar, tergantung konfigurasi.
     return {
-        'profile': 'DEFAULT', 
-        'offset_pct': ENTRY_LOGIC['default_offset_pct'], # Gunakan offset dari config
-        'risk_multiplier': 1.0, # Gunakan 100% dari risiko dasar strategi
-        'order_type': 'limit' # Defaultnya adalah limit order yang sabar
+        'profile': 'DEFAULT',
+        'offset_pct': ENTRY_LOGIC['default_offset_pct'],
+        'risk_multiplier': 1.0,
+        'risk_pct': 0.01,   # BUGFIX: Tambah kunci ini agar live_trader.py tidak KeyError
+        'order_type': 'limit'
     }
 
 def signal_version_A3(df, symbol: str = None):
@@ -983,43 +988,80 @@ def signal_version_MomentumCrossHunter(df, symbol: str = None):
 
 def signal_version_RSIDivergenceHunter(df, symbol: str = None):
     """
-    NEW STRATEGY: RSI Divergence Momentum
-    - Tujuan: Menangkap pembalikan momentum (reversals) dari fake breakouts.
-    - Logic: Entry saat ada divergensi antara harga dan RSI, dikonfirmasi oleh kekuatan tren (ADX).
+    TIGHTENED STRATEGY: RSI Divergence Momentum
+    - Tujuan: Menangkap pembalikan momentum BERKUALITAS TINGGI dari area RSI ekstrem.
+    - Perubahan dari versi sebelumnya:
+      1. ADX threshold dinaikkan ke 25 (hanya pasar trending kuat)
+      2. RSI Zone Filter: divergensi hanya valid di zona oversold (<35) / overbought (>65)
+      3. Minimum RSI Divergence Gap: selisih RSI minimal 5 poin
+      4. MACD divergence konfirmasi wajib
+      5. SL/TP ditingkatkan untuk justifikasi trade yang sedikit tapi berkualitas
     """
     params = CONFIG.get("strategy_params", {}).get("RSIDivergenceHunter", {})
+    rsi_col = f"RSI_{CONFIG['rsi_period']}"
 
-    # --- PERBAIKAN: Tambahkan Market Regime Filter ---
+    # --- Market Regime Filter (berbasis BTC RSI) ---
     if params.get("use_regime_filter", True):
-        # Asumsi: Data BTC sudah digabungkan ke dalam DataFrame utama oleh data_preparer
-        # Untuk backtester, ini perlu penyesuaian di `backtest_market_scanner.py`
-        # Untuk live trader, data BTC perlu di-fetch dan di-merge.
-        # Untuk saat ini, kita asumsikan kolom 'rsi_1h_BTC' ada.
-        if 'rsi_1h_BTC' in df.columns and df['rsi_1h_BTC'].iloc[-1] > params.get("regime_btc_rsi_threshold", 52):
-            return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {} # Matikan strategi jika market sedang bullish
+        if 'rsi_1h_BTC' in df.columns:
+            # Nonaktifkan seluruh strategi jika BTC sedang bullish kuat
+            last_btc_rsi = df['rsi_1h_BTC'].iloc[-1]
+            if last_btc_rsi > params.get("regime_btc_rsi_threshold", 60):
+                return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
 
-    # --- PERBAIKAN: Tambahkan filter blacklist simbol ---
+    # --- Blacklist Filter ---
     if symbol and symbol in params.get("symbol_blacklist", []):
         return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
 
-    # --- Indikator & Kolom yang Dibutuhkan ---
+    # --- Kolom yang Dibutuhkan ---
     adx_col = f"ADX_{CONFIG['atr_period']}"
-    required_cols = ['rsi_bearish_div', 'rsi_bullish_div', adx_col]
+    required_cols = ['rsi_bearish_div', 'rsi_bullish_div', adx_col, rsi_col]
     if params.get("use_macd_div_confirm", True):
         required_cols.extend(['macd_bearish_div', 'macd_bullish_div'])
 
     if any(col not in df.columns for col in required_cols):
         return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
 
-    # --- Sinyal Divergensi Dasar ---
-    base_long_signal = df['rsi_bullish_div']
-    base_short_signal = df['rsi_bearish_div']
+    rsi = df[rsi_col]
+    adx = df[adx_col]
 
-    # --- Filter & Konfirmasi ---
-    # 1. Konfirmasi Kekuatan Tren (ADX)
-    trend_is_strong = df[adx_col] > params.get("adx_threshold", 20)
+    # ==========================================================================
+    # FILTER 1: Kekuatan Tren (ADX > 25 — DIPERKETAT dari 22)
+    # Divergensi hanya bermakna jika ada tren yang cukup kuat
+    # ==========================================================================
+    trend_is_strong = adx > params.get("adx_threshold", 25)
 
-    # 2. (Opsional) Konfirmasi Divergensi MACD
+    # ==========================================================================
+    # FILTER 2: RSI Zone Filter (BARU)
+    # Bullish divergensi hanya valid di zona oversold, bearish di overbought
+    # Ini menghindari divergensi palsu di tengah range
+    # ==========================================================================
+    in_oversold_zone = pd.Series(False, index=df.index)
+    in_overbought_zone = pd.Series(False, index=df.index)
+
+    if params.get("use_rsi_zone_filter", True):
+        rsi_oversold_thresh = params.get("rsi_zone_oversold", 35)
+        rsi_overbought_thresh = params.get("rsi_zone_overbought", 65)
+        in_oversold_zone = rsi < rsi_oversold_thresh
+        in_overbought_zone = rsi > rsi_overbought_thresh
+    else:
+        in_oversold_zone = pd.Series(True, index=df.index)
+        in_overbought_zone = pd.Series(True, index=df.index)
+
+    # ==========================================================================
+    # FILTER 3: Minimum RSI Divergence Gap (BARU)
+    # Pastikan RSI saat ini berbeda SIGNIFIKAN dari nilai lookback
+    # Ini menyaring divergensi "weak" yang hampir tidak ada perbedaannya
+    # ==========================================================================
+    min_gap = params.get("min_rsi_divergence_gap", 5.0)
+    lookback = 10  # Sama dengan yang digunakan di indicators.py
+    rsi_gap_bullish = (rsi.shift(lookback) - rsi).abs()   # Seberapa besar RSI naik dari low
+    rsi_gap_bearish = (rsi - rsi.shift(lookback)).abs()   # Seberapa besar RSI turun dari high
+    has_meaningful_bullish_div = rsi_gap_bullish >= min_gap
+    has_meaningful_bearish_div = rsi_gap_bearish >= min_gap
+
+    # ==========================================================================
+    # FILTER 4: MACD Divergence Confirmation (sudah ada, tetap wajib)
+    # ==========================================================================
     if params.get("use_macd_div_confirm", True):
         macd_confirm_long = df['macd_bullish_div']
         macd_confirm_short = df['macd_bearish_div']
@@ -1027,40 +1069,202 @@ def signal_version_RSIDivergenceHunter(df, symbol: str = None):
         macd_confirm_long = pd.Series(True, index=df.index)
         macd_confirm_short = pd.Series(True, index=df.index)
 
-    # --- Gabungkan Sinyal ---
-    long_signal = base_long_signal & trend_is_strong & macd_confirm_long
-    short_signal = base_short_signal & trend_is_strong & macd_confirm_short
+    # ==========================================================================
+    # GABUNGKAN: Semua filter harus terpenuhi
+    # ==========================================================================
+    long_signal = (
+        df['rsi_bullish_div']        # Deteksi divergensi bullish
+        & trend_is_strong            # Tren cukup kuat
+        & in_oversold_zone           # RSI di zona oversold
+        & has_meaningful_bullish_div # Gap RSI yang signifikan
+        & macd_confirm_long          # Konfirmasi MACD
+    )
+    short_signal = (
+        df['rsi_bearish_div']        # Deteksi divergensi bearish
+        & trend_is_strong            # Tren cukup kuat
+        & in_overbought_zone         # RSI di zona overbought
+        & has_meaningful_bearish_div # Gap RSI yang signifikan
+        & macd_confirm_short         # Konfirmasi MACD
+    )
 
-    # --- BARU: Logika Adaptif Berdasarkan Rezim BTC ---
+    # ==========================================================================
+    # Logika Adaptif Berdasarkan Rezim BTC
+    # ==========================================================================
     allow_long_final = params.get("allow_long", True)
     allow_short_final = params.get("allow_short", True)
-    
+
     if 'rsi_1h_BTC' in df.columns:
         is_bull_regime = df['rsi_1h_BTC'] > 60
         allow_long_final = np.where(is_bull_regime, True, allow_long_final)
         allow_short_final = np.where(is_bull_regime, False, allow_short_final)
 
-    # --- PERBAIKAN: Terapkan filter arah sinyal dinamis ---
     if isinstance(allow_long_final, (np.ndarray, pd.Series)):
         long_signal[~allow_long_final] = False
     elif not allow_long_final:
         long_signal[:] = False
-    
+
     if isinstance(allow_short_final, (np.ndarray, pd.Series)):
         short_signal[~allow_short_final] = False
     elif not allow_short_final:
         short_signal[:] = False
-        
-    # --- Exit Parameters ---
+
+    # --- Exit Parameters (DIPERKETAT untuk justifikasi trade berkualitas) ---
     exit_params = {
-        'sl_multiplier': params.get("sl_multiplier", 1.8),
-        'rr_ratio': params.get("rr_ratio", 2.2),
+        'sl_multiplier': params.get("sl_multiplier", 2.5),
+        'rr_ratio': params.get("rr_ratio", 2.5),
         'trailing': {
             "enabled": True,
             "trigger_rr": params.get("trailing_trigger_rr", 1.5),
-            "distance_atr": params.get("trailing_distance_atr", 2.2),
+            "distance_atr": params.get("trailing_distance_atr", 2.0),
         }
     }
+    return long_signal, short_signal, exit_params
+
+
+def signal_version_VWAPMeanReversionScalper(df, symbol: str = None):
+    """
+    NEW STRATEGY: VWAP Mean Reversion Scalper
+    - Tujuan: Menangkap bounce dari VWAP saat harga overextended.
+    - Logic:
+        LONG:  Harga turun SIGNIFIKAN di bawah VWAP + RSI oversold + Volume spike + Candle bullish reversal
+        SHORT: Harga naik SIGNIFIKAN di atas VWAP + RSI overbought + Volume spike + Candle bearish reversal
+    - Edge: VWAP adalah level institusional yang kuat; mean reversion ke VWAP sangat sering terjadi di crypto.
+    - Target: 40-70 trades per bulan, WR 55-62%, SL ketat (1.5x ATR), RR 2:1
+    """
+    params = CONFIG.get("strategy_params", {}).get("VWAPMeanReversionScalper", {})
+
+    # --- Blacklist Filter ---
+    if symbol and symbol in params.get("symbol_blacklist", []):
+        return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+
+    # --- Kolom yang Dibutuhkan ---
+    rsi_col = f"RSI_{CONFIG['rsi_period']}"
+    vol_ma_col = f"VOL_{CONFIG['volume_lookback']}"
+    atr_col = f"ATRr_{CONFIG['atr_period']}"
+
+    required_cols = ['close', 'open', 'high', 'low', 'volume', 'VWAP_D',
+                     rsi_col, vol_ma_col, atr_col, 'atr_percentile']
+
+    if any(col not in df.columns for col in required_cols):
+        return pd.Series(False, index=df.index), pd.Series(False, index=df.index), {}
+
+    rsi = df[rsi_col]
+    vwap = df['VWAP_D']
+    close = df['close']
+    open_ = df['open']
+    high = df['high']
+    low = df['low']
+    atr = df[atr_col]
+
+    # ==========================================================================
+    # FILTER A: Volatility Regime (jangan trade di pasar mati atau saat spike ekstrem)
+    # ==========================================================================
+    atr_pct = df['atr_percentile']
+    volatility_ok = (
+        (atr_pct > params.get("min_atr_percentile", 0.30)) &
+        (atr_pct < params.get("max_atr_percentile", 0.90))
+    )
+
+    # ==========================================================================
+    # FILTER B: Deviasi Harga dari VWAP
+    # Harga harus sudah "jauh" dari VWAP sebelum kita ekspektasikan mean reversion
+    # ==========================================================================
+    vwap_safe = vwap.replace(0, np.nan)  # Hindari division by zero
+    price_vs_vwap_pct = (close - vwap_safe) / vwap_safe  # Positif = di atas VWAP
+
+    dev_pct_long = params.get("vwap_deviation_pct_long", 0.005)    # -0.5% untuk long
+    dev_pct_short = params.get("vwap_deviation_pct_short", 0.005)  # +0.5% untuk short
+
+    price_below_vwap = price_vs_vwap_pct < -dev_pct_long   # Harga sudah turun cukup
+    price_above_vwap = price_vs_vwap_pct > dev_pct_short   # Harga sudah naik cukup
+
+    # ==========================================================================
+    # FILTER C: RSI di Zona Ekstrem
+    # ==========================================================================
+    rsi_os = params.get("rsi_oversold", 33)
+    rsi_ob = params.get("rsi_overbought", 67)
+    rsi_oversold = rsi < rsi_os
+    rsi_overbought = rsi > rsi_ob
+
+    # ==========================================================================
+    # FILTER D: Volume Spike (konfirmasi ada partisipan yang masuk)
+    # ==========================================================================
+    vol_mult = params.get("volume_spike_multiplier", 1.5)
+    volume_confirmed = df['volume'] > (df[vol_ma_col] * vol_mult)
+
+    # ==========================================================================
+    # FILTER E: Candle Reversal (body dalam arah yang benar)
+    # Long:  Candle harus BULLISH (close > open) = konfirmasi buyer masuk
+    # Short: Candle harus BEARISH (close < open) = konfirmasi seller masuk
+    # Body harus cukup besar relatif terhadap range candle
+    # ==========================================================================
+    candle_range = (high - low).replace(0, np.nan)
+    candle_body = abs(close - open_)
+    min_body_ratio = params.get("min_body_ratio", 0.45)
+    body_strong_enough = (candle_body / candle_range) >= min_body_ratio
+
+    is_bullish_candle = close > open_  # Candle hijau
+    is_bearish_candle = close < open_  # Candle merah
+
+    # ==========================================================================
+    # FILTER F (Opsional): Trend Alignment
+    # Long hanya jika tren 15m masih UPTREND (mean reversion dalam tren besar = lebih aman)
+    # Short hanya jika tren 15m masih DOWNTREND
+    # ==========================================================================
+    if params.get("use_trend_alignment", True):
+        # Gunakan 'trend' column yang sudah dihitung dari EMA 15m di data_preparer
+        if 'trend' in df.columns:
+            trend_allows_long = df['trend'] == 'UPTREND'
+            trend_allows_short = df['trend'] == 'DOWNTREND'
+        else:
+            # Fallback: gunakan EMA_50 sebagai trend filter
+            ema_col = f"EMA_{CONFIG['ema_period']}"
+            if ema_col in df.columns:
+                trend_allows_long = close > df[ema_col]
+                trend_allows_short = close < df[ema_col]
+            else:
+                trend_allows_long = pd.Series(True, index=df.index)
+                trend_allows_short = pd.Series(True, index=df.index)
+    else:
+        trend_allows_long = pd.Series(True, index=df.index)
+        trend_allows_short = pd.Series(True, index=df.index)
+
+    # ==========================================================================
+    # GABUNGKAN SINYAL
+    # LONG:  Semua kondisi bullish terpenuhi
+    # SHORT: Semua kondisi bearish terpenuhi
+    # ==========================================================================
+    long_signal = (
+        price_below_vwap        # Harga di bawah VWAP (target untuk kembali ke VWAP)
+        & rsi_oversold           # RSI oversold (momentum lemah, potensi reversal)
+        & volume_confirmed       # Volume spike (institusi mulai masuk)
+        & is_bullish_candle      # Candle reversal bullish
+        & body_strong_enough     # Body cukup kuat
+        & volatility_ok          # Volatilitas dalam range normal
+        & trend_allows_long      # Arah tren mendukung
+    )
+
+    short_signal = (
+        price_above_vwap         # Harga di atas VWAP (target untuk turun ke VWAP)
+        & rsi_overbought          # RSI overbought (momentum lemah, potensi reversal)
+        & volume_confirmed        # Volume spike
+        & is_bearish_candle       # Candle reversal bearish
+        & body_strong_enough      # Body cukup kuat
+        & volatility_ok           # Volatilitas dalam range normal
+        & trend_allows_short      # Arah tren mendukung
+    )
+
+    # --- Exit Parameters: Scalping ketat ---
+    exit_params = {
+        'sl_multiplier': params.get("sl_multiplier", 1.5),
+        'rr_ratio': params.get("rr_ratio", 2.0),
+        'trailing': {
+            "enabled": True,
+            "trigger_rr": params.get("trailing_trigger_rr", 1.0),  # Breakeven cepat
+            "distance_atr": params.get("trailing_distance_atr", 1.2),
+        }
+    }
+
     return long_signal, short_signal, exit_params
 
 # =============================================================================
@@ -1068,51 +1272,61 @@ def signal_version_RSIDivergenceHunter(df, symbol: str = None):
 # =============================================================================
 
 STRATEGY_CONFIG = {
-    # === ACTIVE STRATEGIES (These will generate signals) ===
-    
-    # "AdaptiveTrendRide(A3)": {
-    #     "function": signal_version_A3,
-    #     "weight": 0.50  # Bobot utama
-    # },
-    # "SmartRegimeScalper(B1)": {
-    #     "function": signal_version_B1,
-    #     "weight": 0.50  # Standard weight
-    # },
+    # =========================================================================
+    # === ACTIVE STRATEGIES ===
+    # Total possible score: 0.50 + 0.20 + 0.15 + 0.20 + 0.25 = 1.30
+    # consensus_ratio = 0.09 → required_score = 1.30 * 0.09 ≈ 0.12
+    # Artinya: 1 strategi apapun sudah cukup trigger trade (single-strategy mode)
+    # Untuk konsensus lebih ketat, naikkan consensus_ratio ke 0.35-0.45
+    # =========================================================================
+
     "AltcoinVolumeBreakoutHunter": {
         "function": signal_version_AltcoinVolumeBreakoutHunter,
-        "weight": 0.50 # Bobot utama untuk momentum
+        "weight": 0.50  # Strategi utama — volume breakout altcoin
     },
-    # "MemecoinMoonshotHunter": {
-    #     "function": signal_version_MemecoinMoonshotHunter,
-    #     "weight": 0.30 # Bobot lebih rendah, high-risk high-reward
-    # },
     "LongOnlyCorrectionHunter": {
         "function": signal_version_LongOnlyCorrectionHunter,
-        "weight": 0.10 # Bobot komplementer untuk menangkap koreksi
+        "weight": 0.20  # DINAIKKAN: Dari 0.10 -> 0.20 agar lebih berpengaruh
     },
     "MomentumCrossHunter": {
         "function": signal_version_MomentumCrossHunter,
-        "weight": 0.15 # PERBAIKAN: Bobot diturunkan karena sedang di-tuning ulang
+        "weight": 0.15  # Strategi trend-following berbasis EMA cross
     },
+    # DIPERKETAT: Bobot lebih rendah karena filter jauh lebih ketat sekarang
+    # Trade lebih sedikit tapi JAUH lebih berkualitas
     "RSIDivergenceHunter": {
         "function": signal_version_RSIDivergenceHunter,
-        "weight": 0.25 # Bobot sedang untuk strategi komplementer berkualitas tinggi
+        "weight": 0.20  # TURUN: Dari 0.25 -> 0.20 untuk mencerminkan filter lebih ketat
     },
+    # BARU: VWAP Mean Reversion — strategi baru berbasis level institusional
+    "VWAPMeanReversionScalper": {
+        "function": signal_version_VWAPMeanReversionScalper,
+        "weight": 0.25  # Bobot cukup tinggi — edge yang jelas di crypto
+    },
+
+    # =========================================================================
+    # === INACTIVE STRATEGIES (enable untuk testing) ===
+    # =========================================================================
+
+    # "AdaptiveTrendRide(A3)": {
+    #     "function": signal_version_A3,
+    #     "weight": 0.50
+    # },
+    # "SmartRegimeScalper(B1)": {
+    #     "function": signal_version_B1,
+    #     "weight": 0.50
+    # },
+    # "MemecoinMoonshotHunter": {
+    #     "function": signal_version_MemecoinMoonshotHunter,
+    #     "weight": 0.30
+    # },
     # "HybridScalper": {
     #     "function": signal_version_HYBRID_SCALPER,
-    #     "weight": 0.8  # LOWER weight = contributes signals but doesn't dominate consensus
-    # }
-    
-    # === INACTIVE STRATEGIES (Commented out - enable for testing) ===
-    
-    # "A3_Conservative": {
-    #     "function": signal_version_A3_CONSERVATIVE,
-    #     "weight": 1.2
+    #     "weight": 0.80
     # },
-    
     # "BreakoutHunter": {
     #     "function": signal_version_BREAKOUT_HUNTER,
-    #     "weight": 0.7  # Experimental - low weight
+    #     "weight": 0.70
     # }
 }
 

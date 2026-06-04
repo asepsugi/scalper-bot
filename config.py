@@ -126,7 +126,7 @@ CONFIG = {
         "LongOnlyCorrectionHunter": { # REFACTORED to Mean Reversion / Dip Buyer
             "risk_per_trade": 0.01,          # Risiko 1%
             # --- Entry Parameters ---
-            "rsi_oversold_threshold": 35,    # PERBAIKAN: Beli jika RSI < 30 (lebih oversold)
+            "rsi_oversold_threshold": 30,    # PERBAIKAN: Beli jika RSI < 30 (lebih oversold)
             "bb_period": 20,                 # Periode Bollinger Bands
             "bb_std_dev": 2.2,               # PERBAIKAN: Standar deviasi BB lebih lebar untuk menangkap volatilitas
             "use_macro_trend_filter": False,  # Wajibkan harga > EMA 200 1h
@@ -180,25 +180,62 @@ CONFIG = {
             ]
         },
         "RSIDivergenceHunter": {
-            "risk_per_trade": 0.010,
-            # --- Entry Parameters ---
-            "adx_threshold": 20,             # ADX must be > 20 to confirm trend strength
-            "use_macd_div_confirm": True,    # Use MACD divergence as a second confirmation
-            # --- BARU: Market Regime Filter ---
-            "use_regime_filter": True,      # NONAKTIFKAN SEMENTARA: Izinkan short bahkan saat BTC sedikit bullish
-            "regime_btc_rsi_threshold": 52,  # Hanya aktifkan strategi jika RSI 1h BTC di bawah 52 (choppy/bearish)
-
+            "risk_per_trade": 0.008,         # Turunkan risk karena filter lebih ketat = sedikit trade
+            # --- DIPERKETAT: Entry Parameters ---
+            "adx_threshold": 25,             # NAIK: Dari 22 -> 25. Hanya tren yang benar-benar kuat.
+            "use_macd_div_confirm": True,    # Wajib konfirmasi MACD divergence
+            # --- DIPERKETAT: RSI Zone Filter ---
+            # Divergensi hanya valid jika terjadi di zona ekstrem RSI
+            "use_rsi_zone_filter": True,
+            "rsi_zone_oversold": 35,         # Bullish div hanya valid jika RSI < 35
+            "rsi_zone_overbought": 65,       # Bearish div hanya valid jika RSI > 65
+            # --- DIPERKETAT: Minimum Divergence Gap ---
+            # RSI antara titik divergensi harus cukup berbeda (hindari divergensi "weak")
+            "min_rsi_divergence_gap": 5.0,   # Minimal selisih RSI 5 poin antara swing points
+            # --- Market Regime Filter ---
+            "use_regime_filter": True,
+            "regime_btc_rsi_threshold": 60,
             # --- Directional Control ---
-            "allow_long": True,             # Focus on short signals for now
+            "allow_long": True,
             "allow_short": True,
-            # --- Exit Strategy ---
-            "sl_multiplier": 2.0, # SANGAT KETAT: Dari 2.2 -> 2.0 ATR
-            "rr_ratio": 2.0, # SANGAT KETAT: Target realistis dari 2.5 -> 2.0R
-            "trailing_trigger_rr": 1.0,      # SANGAT CEPAT: Mulai trailing di breakeven (1.0R)
-            "trailing_distance_atr": 1.5,    # SANGAT KETAT: Jarak trailing lebih ketat
-            # --- BARU: Blacklist untuk koin yang tidak cocok ---
+            # --- DIPERKETAT: Exit Strategy ---
+            "sl_multiplier": 2.5,            # NAIK: Beri ruang lebih (setup berkualitas butuh ruang napas)
+            "rr_ratio": 2.5,                 # NAIK: Target lebih tinggi untuk justify trade yang lebih sedikit
+            "trailing_trigger_rr": 1.5,      # Mulai trailing setelah 1.5R profit
+            "trailing_distance_atr": 2.0,    # Jarak trailing lebih longgar untuk ride
+            # --- Blacklist ---
             "symbol_blacklist": [
-                "TRUMPUSDT", "XLMUSDT", "PENGUUSDT", "HUSDT", "JELLYJELLYUSDT", "MYXUSDT", "MOODENGUSDT", "NEIROUSDT"
+                "TRUMPUSDT", "XLMUSDT", "PENGUUSDT", "HUSDT", "JELLYJELLYUSDT",
+                "MYXUSDT", "MOODENGUSDT", "NEIROUSDT", "1000PEPEUSDT", "BONKUSDT"
+            ]
+        },
+        "VWAPMeanReversionScalper": {
+            "risk_per_trade": 0.010,         # 1% risiko per trade
+            # --- Entry Parameters ---
+            # Long: harga di bawah VWAP + RSI oversold + volume spike + bullish bounce
+            # Short: harga di atas VWAP + RSI overbought + volume spike + bearish candle
+            "vwap_deviation_pct_long": 0.005, # Harga minimal 0.5% di BAWAH VWAP untuk long
+            "vwap_deviation_pct_short": 0.005,# Harga minimal 0.5% di ATAS VWAP untuk short
+            "rsi_oversold": 33,              # RSI < 33 untuk long
+            "rsi_overbought": 67,            # RSI > 67 untuk short
+            "volume_spike_multiplier": 1.5,  # Volume harus > 1.5x MA20
+            "require_reversal_candle": True, # Wajibkan candle reversal (body kuat berlawanan arah)
+            "min_body_ratio": 0.45,          # Badan candle minimal 45% dari total range
+            # --- Volatility Filter ---
+            "min_atr_percentile": 0.30,      # Tidak trade di pasar yang terlalu sepi
+            "max_atr_percentile": 0.90,      # Tidak trade saat volatilitas ekstrem
+            # --- Trend Alignment Filter ---
+            # Hanya long jika tren 15m masih bullish (mean reversion dalam tren)
+            "use_trend_alignment": True,
+            # --- Exit Strategy (Tight Scalping) ---
+            "sl_multiplier": 1.5,            # SL ketat untuk scalp
+            "rr_ratio": 2.0,                 # RR 2:1
+            "trailing_trigger_rr": 1.0,      # Breakeven setelah 1R
+            "trailing_distance_atr": 1.2,    # Trailing sangat ketat
+            # --- Blacklist: hindari koin terlalu volatile ---
+            "symbol_blacklist": [
+                "1000PEPEUSDT", "BONKUSDT", "WIFUSDT", "FLOKIUSDT", "MEMEUSDT",
+                "TRUMPUSDT", "FARTCOINUSDT", "TRUTHUSDT"
             ]
         },
     }, # <-- PERBAIKAN: Tambahkan koma yang hilang di sini
@@ -245,8 +282,8 @@ ENTRY_LOGIC = {
 }
 
 LIVE_TRADING_CONFIG = {
-    "max_symbols_to_trade": 20,  # DOWN from 30 (Symbol & Data Focus)
-    "max_active_positions_limit": 20, # NAIKKAN: Agar tidak bottleneck saat backtest banyak sinyal
+    "max_symbols_to_trade": 10,  # DOWN from 30 (Symbol & Data Focus)
+    "max_active_positions_limit": 10, # NAIKKAN: Agar tidak bottleneck saat backtest banyak sinyal
     
     "max_margin_usage_pct": 0.60,  # DOWN from 0.80 (more conservative)
     

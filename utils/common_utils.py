@@ -1,5 +1,7 @@
 import ccxt
 from rich.console import Console
+from datetime import datetime, timedelta, timezone
+import re
 
 # --- PERBAIKAN: Impor API_KEYS dari config ---
 from config import API_KEYS
@@ -70,5 +72,15 @@ async def get_all_futures_symbols(exchange: ccxt.Exchange):
         console.log(f"Found {len(final_symbols)} active USDT perpetual symbols with volume > ${min_volume_usd/1_000_000:.0f}M. Disortir berdasarkan volume.")
         return final_symbols
     except (ccxt.NetworkError, ccxt.ExchangeError, ccxt.BadSymbol) as e:
+        # --- PERBAIKAN: Deteksi otomatis waktu unban ---
+        error_str = str(e)
+        if "banned until" in error_str:
+            match = re.search(r'banned until (\d+)', error_str)
+            if match:
+                ts = int(match.group(1))
+                # Konversi ke WIB (UTC+7) agar lebih jelas
+                wib_tz = timezone(timedelta(hours=7))
+                ban_time = datetime.fromtimestamp(ts / 1000, tz=wib_tz).strftime('%Y-%m-%d %H:%M:%S')
+                console.log(f"[bold red]CRITICAL: IP Banned until {ban_time} WIB[/bold red]")
         console.log(f"[bold red]Error fetching symbols from Binance:[/bold red] {e}")
         return []

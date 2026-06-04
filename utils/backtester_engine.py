@@ -711,9 +711,9 @@ class PortfolioBacktester:
         if self.weekly_whitelists:
             whitelist_log_str += "\n**Contoh Rotasi Whitelist Mingguan:**\n\n"
             # Batasi hingga 5 minggu pertama untuk keringkasan log
-            for i, (week_num, symbols) in enumerate(list(self.weekly_whitelists.items())[:5]):
+            for i, (week_key, symbols) in enumerate(list(self.weekly_whitelists.items())[:5]):
                 symbols_str = ", ".join(list(symbols)[:5]) + ('...' if len(symbols) > 5 else '')
-                whitelist_log_str += f"- **Minggu {week_num}:** `{symbols_str}`\n"
+                whitelist_log_str += f"- **Minggu {week_key}:** `{symbols_str}`\n"
             if len(self.weekly_whitelists) > 5:
                 whitelist_log_str += "- ... (dan seterusnya)\n"
 
